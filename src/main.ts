@@ -1,6 +1,7 @@
 import './style.css';
 import { ic, initUi, toast, ANN, annHtml, j2iso, iso2j, daysLeft, isoToday } from './ui';
 import { mkServer } from './server';
+import { mkExams } from './exams';
 import { initPwa } from './pwa';
 import { snapList } from './store';
 import fontUrl from './assets/vazirmatn-arabic-wght-normal.woff2?url';
@@ -59,13 +60,13 @@ function line(labels,series){const W=600,H=230,pl=40,pr=12,pt=14,pb=34,all=serie
 function bars(items,fmt=n){if(!items.length)return'<p class="m">داده‌ای نیست</p>';const mx=Math.max(...items.map(i=>Math.abs(i.v)),1);return items.map(i=>`<div style="margin:6px 0"><div style="display:flex;justify-content:space-between"><span>${esc(i.l)}</span><b>${fmt(i.v)}</b></div><div class="bar"><i style="width:${Math.max(2,Math.abs(i.v)/mx*100)}%;background:${i.c||'var(--ac)'}"></i></div></div>`).join('')}
 /* ---------- state & nav ---------- */
 const U:any={p:'home',ins:'ماز',sx:null,es:'g',rc:CL[0],rs:'num',rx:null,as:'o',xs:'cal',xc:CL[0],w:null,sv:'',gm:'a',cls:'all',q:'',ex:null,ct:'trend',sort:'num'};
-const PG=[['home','خانه','home'],['ex','معافیت','cal'],['stu','دانش‌آموزان','users'],['exm','آزمون و اسکن','clip'],['ana','تحلیل','chart'],['ann','اطلاعیه‌ها','bell'],['con','مشاوره','chat'],['srv','سرور','cloud'],['exp','ابزار','tool']];
+const PG=[['home','خانه','home'],['ex','معافیت','cal'],['stu','دانش‌آموزان','users'],['exm','آزمون‌ها','clip'],['ann','اطلاعیه‌ها','bell'],['con','مشاوره','chat'],['srv','سرور','cloud'],['exp','ابزار','tool']];
 function go(p){U.p=p;draw()}
 function draw(){ensureNums();ensureEx();if(U.w==null)U.w=wk0();$('#dt').textContent=new Date().toLocaleDateString('fa-IR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
- const cur=U.p==='sp'?'stu':U.p;$('#nv').innerHTML=PG.map(([k,t,i])=>`<button class="${cur===k?'on':''}" onclick="go('${k}')" aria-label="${t}">${ic(i)}<span>${t}</span></button>`).join('');
+ const cur=U.p==='sp'?'stu':U.p;$('#nv').innerHTML=PG.map(([k,t,i])=>`<button class="${cur===k?'on':''}" onclick="go('${k}')" aria-label="${t}">${ic(i)}<span>${t}</span>${k==='exm'&&SV.pend()?`<i class="bdg">${n(SV.pend())}</i>`:''}</button>`).join('');
  $('#pt').textContent=U.p==='sp'?'پروفایل دانش‌آموز':(PG.find(p=>p[0]===U.p)||[,''])[1];
  $('#app').classList.remove('in');void ($('#app') as any).offsetWidth;$('#app').classList.add('in');
- $('#app').innerHTML=({home,ex:xpg,stu,exm:exmx,ana,ann:annPage,con:()=>SV.conPage(),srv:()=>SV.page(),exp,sp:spage})[U.p]();window.scrollTo(0,0)}
+ $('#app').innerHTML=({home,ex:xpg,stu,exm:()=>EX.page(),ana:()=>EX.page(),ann:annPage,con:()=>SV.conPage(),srv:()=>SV.page(),exp,sp:spage})[U.p]();window.scrollTo(0,0)}
 const insSeg=()=>`<div class="seg">${['ماز','قلم‌چی'].map(i=>`<button class="${U.ins===i?'on':''}" onclick="U.ins='${i}';draw()">مبنا: ${i}</button>`).join('')}</div>`;
 const chips=()=>`<div class="seg">${['all',...CL].map(c=>`<button class="${U.cls===c?'on':''}" onclick="U.cls='${c}';draw()">${c==='all'?'همه کلاس‌ها':c}</button>`).join('')}</div>`;
 /* ---------- dashboard ---------- */
@@ -86,7 +87,7 @@ function dash(){const E=insE(),le=E[E.length-1],pe=E[E.length-2],S=snap();
  <div class="c"><h3>🏆 برترین‌ها (آخرین تراز)</h3>${[...S].filter(s=>s.l!=null).sort((a,b)=>b.l-a.l).slice(0,5).map((s,i)=>row(s,`${n(i+1)}. <b>${n(s.l)}</b>`)).join('')}</div>
  <div class="c"><h3>📈 بیشترین پیشرفت</h3>${[...S].filter(s=>s.d!=null).sort((a,b)=>b.d-a.d).slice(0,5).map(s=>row(s,dl(s.d))).join('')}</div>
  </div>
- <div class="c" style="margin-top:10px"><h3>میان‌برها</h3><div class="tb"><button class="btn p" onclick="go('exm')">ثبت آزمون جدید</button><button class="btn" onclick="U.es='s';go('exm')">اسکن کارنامه</button><button class="btn" onclick="go('stu')">افزودن دانش‌آموز</button><button class="btn" onclick="U.as='c';go('ana')">نمودارها</button><button class="btn" onclick="go('exp')">گرفتن خروجی</button></div>
+ <div class="c" style="margin-top:10px"><h3>میان‌برها</h3><div class="tb"><button class="btn p" onclick="xgo('mg')">ثبت آزمون جدید</button><button class="btn" onclick="xgo('in')">اسکن کارنامه</button><button class="btn" onclick="go('stu')">افزودن دانش‌آموز</button><button class="btn" onclick="xgo('ex')">نتایج آزمون‌ها</button><button class="btn" onclick="go('exp')">گرفتن خروجی</button></div>
  </div>`}
 /* ---------- students ---------- */
 const spark=(v:any[])=>{const a=v.filter(x=>x!=null);if(a.length<2)return '<span class="m">—</span>';const lo=Math.min(...a),hi=Math.max(...a),W=64,H=20,X=(i:number)=>W-2-(W-4)*i/(a.length-1),Y=(x:number)=>H-2-(H-4)*(x-lo)/((hi-lo)||1);return `<svg width="${W}" height="${H}"><polyline fill="none" stroke="${a[a.length-1]>=a[0]?'var(--ok)':'var(--bad)'}" stroke-width="2" points="${a.map((x,i)=>X(i)+','+Y(x)).join(' ')}"/></svg>`};
@@ -119,7 +120,7 @@ function spage(){const s=D.students.find(x=>x.id===U.sid);if(!s){U.p='stu';retur
  const id=s.id,E=ensureEx(),g=E.g[id],mates=D.students.filter(x=>x.cls===s.cls).sort(byNum),ix=mates.findIndex(x=>x.id===id),mine=exs().filter(e=>e.res[id]),sch=sexams().filter(e=>e.cls===s.cls&&e.sc[id]);
  const kp=(ins:string)=>{const a=lr(id,ins);return `<div class="c k"><span>تراز ${ins}</span><b>${n(a.l)}</b><span>${a.d!=null?dl(a.d)+' · ':''}رتبه ${n(a.rk)}</span></div>`};
  const hero=`<div class="c hero"><div class="av">${n(s.num)}</div><div style="flex:1;min-width:150px"><h2 style="margin:0">${esc(s.name)}</h2><div class="m">${s.cls} · شماره ${n(s.num)}${s.nid?` · کد ملی <span dir="ltr">${esc(s.nid)}</span>`:''}</div><div>${g?`<span class="tag" style="background:${GC[GL.indexOf(g)]};color:#fff">گروه ${g}</span>`:'<span class="tag">بدون گروه</span>'}<span class="tag">${n(mine.length)} آزمون</span></div></div><div class="tb"><button class="btn" ${ix>0?'':'disabled'} onclick="stuNav(-1)">▶ قبلی</button><button class="btn" ${ix<mates.length-1?'':'disabled'} onclick="stuNav(1)">بعدی ◀</button><button class="btn p" onclick="U.p=U.back||'stu';draw()">↩ بازگشت</button></div></div>`;
- const kpis=`<div class="g" style="margin:10px 0">${kp('ماز')}${kp('قلم‌چی')}<div class="c k"><b>${n(sch.length)}</b><span>آزمون مدرسه</span></div></div>`;
+ const kpis=`<div class="g" style="margin:10px 0">${kp('ماز')}${kp('قلم‌چی')}<div class="c k"><b>${n(sch.length)}</b><span>آزمون مدرسه</span></div><div class="c k" style="cursor:pointer" onclick="xstu('${id}')"><b>📝</b><span>همه‌ی نتایج آزمون‌های او ←</span></div></div>`;
  const tab=U.stab||'ov';let body='';
  if(tab==='ov'){
   const sm:any={};mine.forEach(e=>Object.entries(e.res[id].subj||{}).forEach(([k,v]:any)=>(sm[k]=sm[k]||[]).push(v)));
@@ -160,7 +161,7 @@ function exm(){const E=exs().reverse();if(!U.ex||!D.exams.find(e=>e.id===U.ex))U
  ${e?`<div class="c" style="margin-top:10px"><h3>${esc(e.title)} <span class="m">${e.date}</span> <button class="btn" style="float:left;color:var(--bad)" onclick="delE('${e.id}')">حذف</button></h3>
  <div class="tw"><table><thead><tr><th>#</th><th>نام</th><th>کلاس</th><th>تراز</th><th>رتبه</th></tr></thead><tbody>${D.students.filter(s=>e.res[s.id]).sort((a,b)=>e.res[b.id].level-e.res[a.id].level).map((s,i)=>`<tr onclick="op('${s.id}')"><td>${n(i+1)}</td><td>${esc(s.name)}</td><td>${s.cls}</td><td>${n(e.res[s.id].level)}</td><td>${n(e.res[s.id].rank)}</td></tr>`).join('')}</tbody></table></div>
  <h3 style="margin-top:12px">چسباندن نتایج</h3><textarea id="pr" placeholder="علی احمدی, 7250, 21000"></textarea><button class="btn p" onclick="paste('${e.id}')">ثبت نتایج</button> <span class="m" id="pm"></span></div>`:''}`}
-function addE(){const t=$('#et').value.trim();if(!t)return;if($('#ei').value==='مدرسه'){mkSch(t,$('#ed').value.trim(),$('#ec').value);U.es='h';draw();return}const id='e'+Date.now().toString(36);D.exams.push({id,title:t,inst:$('#ei').value,date:$('#ed').value.trim(),res:{}});U.ex=id;save();draw()}
+function addE(){const t=$('#et').value.trim();if(!t)return;if($('#ei').value==='مدرسه'){mkSch(t,$('#ed').value.trim(),$('#ec').value);draw();return}const id='e'+Date.now().toString(36);D.exams.push({id,title:t,inst:$('#ei').value,date:$('#ed').value.trim(),res:{}});U.ex=id;save();draw()}
 function paste(id){const e=D.exams.find(x=>x.id===id);let ok=0,bad=0;$('#pr').value.split('\n').forEach(l=>{const p=l.split(/[,\t،]/).map(x=>x.trim().replace(/[۰-۹]/g,d=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(d)));if(p.length<2)return;const s=D.students.find(x=>x.name===p[0]);const lvl=+p[1];if(!s||isNaN(lvl)){bad++;return}e.res[s.id]={level:lvl,rank:+p[2]||null,subj:{}};ok++});save();draw();$('#pm').textContent=`${n(ok)} ثبت شد، ${n(bad)} ردیف نامعتبر`}
 function delE(id){if(!confirm('آزمون حذف شود؟'))return;D.exams=D.exams.filter(x=>x.id!==id);U.ex=null;save();draw()}
 /* ---------- charts ---------- */
@@ -199,12 +200,14 @@ const wipe=()=>{if(confirm('همه‌ی داده‌ها پاک شود؟')){D={st
 
 /* ---------- scanner ---------- */
 const CFG:ExamSettings={sections:SUBJ.map((name,i)=>({id:'u'+i,name,color:'#888',n:0,parts:[]}))};
-interface FI{id:number;file:File;st:'busy'|'ok'|'err';err?:string;x?:ImportedExam;sigs:string[];sid:string;done?:boolean}
+interface FI{id:number;file:File;st:'busy'|'ok'|'err';err?:string;x?:ImportedExam;sigs:string[];sid:string;done?:boolean;eid?:string}
 let FILES:FI[]=[];let FID=0;
-async function pick(inp){const fs=Array.from(inp.files||[]) as File[];inp.value='';for(const f of fs){const it:FI={id:++FID,file:f,st:'busy',sigs:[],sid:''};FILES.push(it);}draw();
+async function pick(inp){const fs=Array.from(inp.files||[]) as File[];inp.value='';for(const f of fs){const it:FI={id:++FID,file:f,st:'busy',sigs:[],sid:guessSid(f.name)};FILES.push(it);}draw();
  for(const it of FILES.filter(f=>f.st==='busy')){try{const r=await importReport(it.file,CFG);it.x=r.exam;it.sigs=r.sigs;it.st='ok'}catch(e){it.st='err';it.err=e&&e.message==='layout'?'ساختار کارنامه شناخته نشد (فقط کارنامه‌ی تحلیلی ماز یا PDF قلم‌چی)':'فایل خوانده نشد'}draw()}}
+const nzf=(t:string)=>normQ(String(t)).replace(/[\s_\-.()]+/g,' ').trim();
+function guessSid(fn:string){const f=nzf(fn.replace(/\.[^.]+$/,'')),m=D.students.filter((s:any)=>{const t=nzf(s.name).split(' ').filter(Boolean);return t.length>0&&t.every((w:string)=>f.includes(w))});return m.length===1?m[0].id:''}
 function scn(){const E=exs();
- return `<div class="c scn"><h3>اسکن کارنامه‌ی ماز و قلم‌چی</h3><p class="m">فایل PDF یا عکس کارنامه‌ی هر دانش‌آموز را بدهید (چند فایل هم‌زمان مجاز است). نوع مؤسسه خودکار تشخیص داده می‌شود؛ بعد برای هر فایل دانش‌آموز را انتخاب و اعداد را تأیید کنید.</p>
+ return `<div class="c scn"><h3>📄 اسکن کارنامه‌ی ماز و قلم‌چی</h3><p class="m">PDF یا عکس کارنامه‌ها را یک‌جا انتخاب کنید (هر تعداد). مؤسسه، تاریخ و اعداد خودکار خوانده می‌شود. اگر اسم دانش‌آموز در نام فایل باشد (مثلاً «علی احمدی.pdf») خودش پیدا می‌شود؛ وگرنه فقط اسم را انتخاب کنید و «ثبت همه» را بزنید.</p>
  <input type="file" id="fi" multiple accept="application/pdf,image/*" onchange="pick(this)"></div>
  ${FILES.map(f=>fcard(f)).join('')}
  ${FILES.some(f=>f.st==='ok'&&!f.done)?`<div class="tb" style="margin-top:10px"><button class="btn p" onclick="commitAll()">ثبت همه‌ی آماده‌ها</button><button class="btn" onclick="FILES=[];draw()">پاک‌کردن لیست</button></div>`:FILES.length?`<div class="tb" style="margin-top:10px"><button class="btn" onclick="FILES=[];draw()">پاک‌کردن لیست</button></div>`:''}`}
@@ -212,7 +215,7 @@ function fcard(f:FI){
  if(f.st==='busy')return `<div class="c fc" style="margin-top:10px">⏳ در حال خواندن ${esc(f.file.name)}…</div>`;
  if(f.st==='err')return `<div class="c fc" style="margin-top:10px;border-color:var(--bad)"><b>${esc(f.file.name)}</b><div class="dn">${f.err}</div><button class="btn" onclick="rmf(${f.id})">حذف</button></div>`;
  const x=f.x!;
- if(f.done)return `<div class="c fc" style="margin-top:10px;border-color:var(--ok)">✅ ${esc(f.file.name)} ثبت شد — ${esc(D.students.find(s=>s.id===f.sid)?.name||'')} / ${esc(x.title)}</div>`;
+ if(f.done)return `<div class="c fc" style="margin-top:10px;border-color:var(--ok)"><div class="tb" style="margin:0"><span style="flex:1">✅ <b>${esc(D.students.find(s=>s.id===f.sid)?.name||'')}</b> · ${esc(x.title)} · تراز ${n(x.level)}</span><button class="btn" onclick="X_open('${f.sid}','${f.eid||''}')">دیدن کارنامه</button></div></div>`;
  const free=D.students;
  return `<div class="c fc" style="margin-top:10px"><div class="tb"><b>${esc(f.file.name)}</b><span class="tag">${esc(x.institute)}</span><button class="btn" style="margin-inline-start:auto" onclick="rmf(${f.id})">حذف</button></div>
  <div class="tb"><select onchange="sfs(${f.id},this.value)"><option value="">انتخاب دانش‌آموز…</option>${['تجربی ۳۲۱','تجربی ۳۲۲','ریاضی ۳۱۱'].map(c=>`<optgroup label="${c}">${free.filter(s=>s.cls===c).map(s=>`<option value="${s.id}" ${f.sid===s.id?'selected':''}>${esc(s.name)}</option>`).join('')}</optgroup>`).join('')}</select>
@@ -235,7 +238,7 @@ function commit(f:FI):string|null{
  const subj={},raw={},slv={};
  x.rows.forEach((r,i)=>{const k=r.sectionName;const a=raw[k]||[0,0,0];raw[k]=[a[0]+r.c,a[1]+r.w,a[2]+(r.n-r.c-r.w)];slv[k]=slv[k]==null&&!(k in subj)?r.level:null;if(r.level==null)delete slv[k];if(!r.recognised&&f.sigs[i])rememberHeading(f.sigs[i],k);subj[k]=0});
  Object.keys(raw).forEach(k=>{const[c,w,b]=raw[k],t=c+w+b;subj[k]=t?Math.round((3*c-w)/(3*t)*1000)/10:0});
- e.res[f.sid]={level:x.level,rank:x.countryRank,subj,raw,slv};f.done=true;U.ex=e.id;return null}
+ e.res[f.sid]={level:x.level,rank:x.countryRank,subj,raw,slv};f.done=true;f.eid=e.id;U.ex=e.id;return null}
 function commit1(id){const f=FILES.find(q=>q.id===id)!;const m=commit(f);if(m)alert(m);else save();draw()}
 function commitAll(){const bad:string[]=[];FILES.filter(f=>f.st==='ok'&&!f.done).forEach(f=>{const m=commit(f);if(m)bad.push(f.file.name+': '+m)});save();draw();if(bad.length)alert('این‌ها ثبت نشدند:\n'+bad.join('\n'))}
 
@@ -313,7 +316,7 @@ function home(){const E=ensureEx(),off=Math.round((mid(new Date()).getTime()-wd(
  const hrN=new Date().getHours(),gr=hrN<12?'صبح بخیر':hrN<17?'ظهر بخیر':hrN<20?'عصر بخیر':'شب بخیر',ti=DOFF.indexOf(o);
  const strip=[0,1,2,3].map(d=>{const L=letter(d,w);return `<button class="wd ${d===ti?'now':''}" style="--gc:${GC[GL.indexOf(L)]}" onclick="U.w=${w};U.xs='cal';go('ex')"><small>${DAYN[d]}</small><b>${L}</b><span>${jd(dateOf(w,d))}</span></button>`}).join('');
  return `${SV.badge()}<div class="homehero"><div><small>${gr} 👋</small><h2>${lab}</h2></div><div class="strip">${strip}</div></div><div class="g2">${cards}</div>
- <div class="g tiles">${tl('📅','معافیت و تقویم','گروه‌ها، معلم، پیشرفت',"U.xs='cal';go('ex')")}${tl('👥','دانش‌آموزان','پروفایل و نمرات',"go('stu')")}${tl('📄','اسکن کارنامه','ماز و قلم‌چی',"U.es='s';go('exm')")}${tl('📢','اطلاعیه‌ها','آزمون، جلسه، مهلت…',"go('ann')")}${tl('📊','تحلیل نتایج','نمودار و رتبه‌بندی',"go('ana')")}</div>`}
+ <div class="g tiles">${tl('📅','معافیت و تقویم','گروه‌ها، معلم، پیشرفت',"U.xs='cal';go('ex')")}${tl('👥','دانش‌آموزان','پروفایل و نمرات',"go('stu')")}${tl('📝','آزمون‌ها','کارنامه، نتایج، دانش‌آموزان',"xgo('in')")}${tl('📢','اطلاعیه‌ها','آزمون، جلسه، مهلت…',"go('ann')")}</div>`}
 
 /* ---- exemption page ---- */
 function xpg(){ensureEx();const cl=U.xc;
@@ -400,7 +403,8 @@ async function xpng(){const sv=U.sv&&D.students.find(s=>s.id===U.sv&&s.cls===U.x
  const img=new Image();img.onload=()=>{const k=2,cv=document.createElement('canvas');cv.width=img.width*k;cv.height=img.height*k;const c=cv.getContext('2d');c.scale(k,k);c.drawImage(img,0,0);cv.toBlob(b=>saveFile(`${U.xc}-${sv?nm(sv)+'-':''}هفته.png`,b),'image/png')};
  img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg)}
 const SV=mkServer({get D(){return D},annActive:()=>annActive(),sexams,save,draw:()=>draw(),esc,n,saveFile,ensureEx,tt,status,letter,dateOf,wk0,commit:(f:any)=>commit(f),CFG,U});
-Object.assign(W,SV.h);
+const EX=mkExams({get D(){return D},U,save,draw:()=>draw(),esc,n,n1,avg,line,hue,spark,CL,byNum,today,SV,scn,schp:()=>schp(),FILES:()=>FILES,dlf:(...a:any[])=>(dlf as any)(...a),toast});
+Object.assign(W,SV.h,EX.h);
 SV.init();
 /* ---------- آزمون‌های مدرسه (فقط نمره‌ی هر درس؛ بدون معدل) ---------- */
 function mkSch(t:string,date:string,c:string){const ls=[...new Set(tt(c).flat().filter(Boolean))].map((name:string)=>({name,max:20}));const id='h'+Date.now().toString(36);ensureSch().exams.push({id,title:t,date,cls:c,lessons:ls,sc:{}});U.sx=id;save()}
@@ -408,7 +412,7 @@ function schp(){const S=ensureSch(),E=sexams().reverse();if(!U.sx||!S.exams.find
  return `<div class="g2"><div class="c"><h3>آزمون‌های مدرسه</h3>${E.map(x=>`<div class="row" onclick="U.sx='${x.id}';draw()" style="${x.id===U.sx?'font-weight:800;color:var(--ac)':''}"><span>${esc(x.title)} <span class="tag">${x.cls}</span></span><span class="m">${esc(x.date)}</span></div>`).join('')||'<p class="m">آزمونی نیست</p>'}</div>
  <div class="c"><h3>آزمون مدرسه‌ی جدید</h3><div class="tb"><input id="ht" placeholder="مثلاً میان‌ترم ۲"><input id="hd" value="${today()}" style="width:110px"><select id="hc">${CL.map(c=>`<option ${c===U.xc?'selected':''}>${c}</option>`).join('')}</select></div><button class="btn p" onclick="newSch()">ایجاد؛ درس‌ها از برنامه‌ی کلاس پر می‌شود</button><p class="m">نمره‌ی آزمون مدرسه فقط برای دیدن عملکرد و نمودار است.</p></div></div>${e?schGrid(e):''}`}
 function schGrid(e){const ss=D.students.filter(s=>s.cls===e.cls),mean=(f)=>{const v=ss.map(f).filter(x=>x!=null);return v.length?v.reduce((a,b)=>a+b,0)/v.length:null};
- return `<div class="c" style="margin-top:10px"><div class="tb"><h3 style="margin:0;flex:1">${esc(e.title)} <span class="tag">${e.cls}</span> <span class="m">${esc(e.date)}</span></h3><button class="btn" onclick="U.as='c';U.ct='sav';U.sx='${e.id}';go('ana')">📊 نمودار</button><button class="btn" onclick="schCsv('${e.id}')">CSV</button><button class="btn" style="color:var(--bad)" onclick="schDel('${e.id}')">حذف</button></div>
+ return `<div class="c" style="margin-top:10px"><div class="tb"><h3 style="margin:0;flex:1">${esc(e.title)} <span class="tag">${e.cls}</span> <span class="m">${esc(e.date)}</span></h3><button class="btn" onclick="schCsv('${e.id}')">CSV</button><button class="btn" style="color:var(--bad)" onclick="schDel('${e.id}')">حذف</button></div>
  <div class="tb"><input id="hl" list="hls" placeholder="افزودن درس…" style="width:150px"><datalist id="hls">${[...new Set(tt(e.cls).flat().filter(Boolean))].map(x=>`<option value="${esc(x)}">`).join('')}</datalist><button class="btn" onclick="schLA('${e.id}')">+ درس</button><span class="m">حداکثر نمره‌ی هر درس را زیر نامش تنظیم کنید.</span></div>
  <div class="tw"><table><thead><tr><th>دانش‌آموز</th>${e.lessons.map((l,i)=>`<th>${esc(l.name)} <button class="btn" style="padding:0 6px" onclick="schLR('${e.id}',${i})">✕</button><div class="m">حداکثر <input type="number" value="${l.max}" style="width:52px" onchange="schL('${e.id}',${i},this.value)"></div></th>`).join('')}</tr></thead>
  <tbody>${ss.map(s=>`<tr style="cursor:default"><td>${esc(s.name)}</td>${e.lessons.map(l=>`<td><input type="number" step="0.25" min="0" max="${l.max}" style="width:64px" value="${e.sc[s.id]?.[l.name]??''}" onchange="schS('${e.id}','${s.id}','${esc(l.name)}',this.value)"></td>`).join('')}</tr>`).join('')}</tbody>
@@ -451,7 +455,7 @@ function annClean(){D.ann=D.ann.filter(a=>daysLeft(a.exp)>=0);save();draw()}
 /* ---------- جستجوی سریع (Ctrl+K) ---------- */
 let PI=0,PL:any[]=[];
 const normQ=(t:string)=>t.replace(/[۰-۹]/g,d=>String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/ي/g,'ی').replace(/ك/g,'ک').toLowerCase();
-const ACTS:any[]=[['خانه',()=>go('home')],['تقویم معافیت',()=>{U.xs='cal';go('ex')}],['گروه‌ها',()=>{U.xs='grp';go('ex')}],['برنامه کلاسی',()=>{U.xs='tt';go('ex')}],['معافیت پیشرفت',()=>{U.xs='prg';go('ex')}],['گزارش آزمون',()=>{U.es='g';go('exm')}],['اسکن کارنامه',()=>{U.es='s';go('exm')}],['آزمون‌های مدرسه',()=>{U.es='h';go('exm')}],['نمودارها',()=>{U.as='c';go('ana')}],['اطلاعیه‌ها',()=>go('ann')],['وقت مشاوره',()=>go('con')],['سرور و انتشار',()=>go('srv')],['ابزار و خروجی',()=>go('exp')]];
+const ACTS:any[]=[['خانه',()=>go('home')],['تقویم معافیت',()=>{U.xs='cal';go('ex')}],['گروه‌ها',()=>{U.xs='grp';go('ex')}],['برنامه کلاسی',()=>{U.xs='tt';go('ex')}],['معافیت پیشرفت',()=>{U.xs='prg';go('ex')}],['نتایج هر آزمون',()=>W.xgo('ex')],['نتایج هر دانش‌آموز',()=>W.xgo('st')],['دریافت و اسکن کارنامه',()=>W.xgo('in')],['مدیریت آزمون‌ها',()=>W.xgo('mg')],['آزمون‌های مدرسه',()=>W.xgo('sch')],['اطلاعیه‌ها',()=>go('ann')],['وقت مشاوره',()=>go('con')],['سرور و انتشار',()=>go('srv')],['ابزار و خروجی',()=>go('exp')]];
 function palRender(q:string){q=normQ(q.trim());
  const st=D.students.filter(x=>!q||normQ(x.name).includes(q)||String(x.num)===q).sort(byNum).slice(0,q?8:4).map(x=>({t:x.name,s:`${x.cls} · شماره ${n(x.num)}`,i:'👤',f:()=>op(x.id)}));
  const pg=ACTS.filter(([t])=>!q||normQ(t).includes(q)).slice(0,q?6:8).map(([t,f])=>({t,s:'برو به',i:'↗',f}));

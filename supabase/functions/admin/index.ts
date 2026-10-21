@@ -19,7 +19,23 @@ Deno.serve(async (req) => {
     const u = String(b.username || '').toLowerCase();
     if (!/^[a-z0-9_.-]{3,30}$/.test(u)) return json({ error: 'نام کاربری باید ۳ تا ۳۰ حرف انگلیسی/عدد باشد' }, 400);
     if (String(b.password || '').length < 6) return json({ error: 'رمز حداقل ۶ کاراکتر' }, 400);
-    const { data, error } = await admin.auth.admin.createUser({ email: `${u}@school.example`, password: b.password, email_confirm: true });
+    const email = `${u}@school.example`;
+    let { data, error } = await admin.auth.admin.createUser({ email, password: b.password, email_confirm: true });
+    if (error && /already|registered|exist/i.test(error.message)) {
+      // ممکن است کاربرِ بی‌صاحب (باقی‌مانده از حساب قبلی که ردیف دانش‌آموزش پاک شده) باشد؛ اگر به هیچ دانش‌آموزی وصل نیست پاکش کن و دوباره بساز.
+      let orphan: any = null;
+      for (let page = 1; page <= 20 && !orphan; page++) {
+        const { data: l, error: le } = await admin.auth.admin.listUsers({ page, perPage: 200 });
+        if (le || !l?.users?.length) break;
+        orphan = l.users.find((x: any) => String(x.email).toLowerCase() === email) || null;
+        if (l.users.length < 200) break;
+      }
+      if (!orphan) return json({ error: 'این نام کاربری قبلاً ثبت شده است' }, 400);
+      const { data: used } = await admin.from('students').select('id').eq('auth_id', orphan.id).maybeSingle();
+      if (used) return json({ error: 'این نام کاربری برای یک دانش‌آموز دیگر ساخته شده است' }, 400);
+      await admin.auth.admin.deleteUser(orphan.id);
+      ({ data, error } = await admin.auth.admin.createUser({ email, password: b.password, email_confirm: true }));
+    }
     if (error) return json({ error: error.message }, 400);
     const { data: row, error: e2 } = await admin.from('students').insert({ local_id: b.local_id, name: b.name, cls: b.cls, username: u, auth_id: data.user.id }).select().single();
     if (e2) { await admin.auth.admin.deleteUser(data.user.id); return json({ error: e2.message }, 400); }
