@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl" data-app="admin">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<link rel="icon" href="./favicon.ico" sizes="48x48">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#312e81">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>ایستگاه مدیریت نتایج مدرسه</title>
+</head>
+<body class="locked">
+<div id="gate"><form id="gf" autocomplete="on">
+  <div class="gl"><svg viewBox="0 0 512 512" width="42" height="42" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6366f1"/><stop offset="1" stop-color="#1e1b4b"/></linearGradient></defs><rect width="512" height="512" rx="116" fill="url(#lg)"/><path d="M116 386V292a22 22 0 0 1 22-22h40a22 22 0 0 1 22 22v94z" fill="#fff" fill-opacity=".62"/><path d="M214 386V232a22 22 0 0 1 22-22h40a22 22 0 0 1 22 22v154z" fill="#fff"/><path d="M312 386V332a22 22 0 0 1 22-22h40a22 22 0 0 1 22 22v54z" fill="#fff" fill-opacity=".38"/><path d="M256 112l15.5 31.4 34.6 5-25 24.4 5.9 34.5L256 190.9l-31 16.4 5.9-34.5-25-24.4 34.6-5z" fill="#fbbf24"/></svg></div><h2>ورود مدیر</h2><p id="gs">در حال بررسی…</p>
+  <div id="gfs" hidden>
+    <input id="ge" type="email" name="username" placeholder="ایمیل" autocomplete="username" dir="ltr" required>
+    <input id="gp" type="password" name="password" placeholder="رمز عبور" autocomplete="current-password" dir="ltr" required>
+    <button class="btn" id="gb" type="submit">ورود</button>
+  </div>
+</form></div>
+<div id="shell">
+  <aside id="rail">
+    <div class="brand"><i><svg viewBox="0 0 512 512" width="42" height="42" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6366f1"/><stop offset="1" stop-color="#1e1b4b"/></linearGradient></defs><rect width="512" height="512" rx="116" fill="url(#lg)"/><path d="M116 386V292a22 22 0 0 1 22-22h40a22 22 0 0 1 22 22v94z" fill="#fff" fill-opacity=".62"/><path d="M214 386V232a22 22 0 0 1 22-22h40a22 22 0 0 1 22 22v154z" fill="#fff"/><path d="M312 386V332a22 22 0 0 1 22-22h40a22 22 0 0 1 22 22v54z" fill="#fff" fill-opacity=".38"/><path d="M256 112l15.5 31.4 34.6 5-25 24.4 5.9 34.5L256 190.9l-31 16.4 5.9-34.5-25-24.4 34.6-5z" fill="#fbbf24"/></svg></i><div><b>ایستگاه مدرسه</b><small>مدیریت نتایج</small></div></div>
+    <nav id="nv"></nav>
+    <div class="rail-foot">میان‌بر جستجو<br><b>Ctrl + K</b></div>
+  </aside>
+  <div id="stage">
+    <header id="top"><div><h1 id="pt"></h1><small id="dt"></small></div>
+      <div class="acts"><button class="ib" id="inst" hidden title="نصب برنامه" aria-label="نصب برنامه"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></svg></button><button class="ib" onclick="openPal()" title="جستجو"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></button>
+      <button class="ib" onclick="toggleTheme()" title="تم"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M20 14A8 8 0 1110 4a6.5 6.5 0 0010 10z"/></svg></button></div></header>
+    <main id="app"></main>
+    <footer id="credit">created with ❤️ by Abolfazl Rayati</footer>
+  </div>
+</div>
+<div id="md"><div id="mb"></div></div>
+<div id="pal"><div id="pb"><input id="pq" placeholder="جستجوی دانش‌آموز، شماره، صفحه یا کار…" autocomplete="off"><div id="pr"></div></div></div>
+<div id="toasts"></div>
+<script type="module" src="/src/boot.ts"></script>
+</body>
+</html>

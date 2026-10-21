@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl" data-app="student">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<link rel="icon" href="./favicon.ico" sizes="48x48">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#0f766e">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>پنل دانش‌آموز</title>
+</head>
+<body class="guest">
+<div id="shell">
+  <aside id="rail">
+    <div class="brand"><i><svg viewBox="0 0 512 512" width="42" height="42" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#14b8a6"/><stop offset="1" stop-color="#0f5f59"/></linearGradient></defs><rect width="512" height="512" rx="116" fill="url(#lg)"/><path d="M116 386V292a22 22 0 0 1 22-22h40a22 22 0 0 1 22 22v94z" fill="#fff" fill-opacity=".62"/><path d="M214 386V232a22 22 0 0 1 22-22h40a22 22 0 0 1 22 22v154z" fill="#fff"/><path d="M312 386V332a22 22 0 0 1 22-22h40a22 22 0 0 1 22 22v54z" fill="#fff" fill-opacity=".38"/><path d="M256 112l15.5 31.4 34.6 5-25 24.4 5.9 34.5L256 190.9l-31 16.4 5.9-34.5-25-24.4 34.6-5z" fill="#fbbf24"/></svg></i><div><b id="who">پنل دانش‌آموز</b><small id="dt"></small></div></div>
+    <nav id="nv"></nav>
+    <div class="rail-foot"><button class="btn" onclick="logout()" style="width:100%">خروج</button></div>
+  </aside>
+  <div id="stage">
+    <header id="top"><div><h1 id="pt">پنل دانش‌آموز</h1></div>
+      <div class="acts"><button class="ib" id="inst" hidden title="نصب برنامه" aria-label="نصب برنامه"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></svg></button><button class="ib" onclick="toggleTheme()" title="تم"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M20 14A8 8 0 1110 4a6.5 6.5 0 0010 10z"/></svg></button><button class="ib hide-guest" onclick="logout()" title="خروج" style="font-size:12px">خروج</button></div></header>
+    <main id="app"></main>
+    <footer id="credit">created with ❤️ by Abolfazl Rayati</footer>
+  </div>
+</div>
+<div id="toasts"></div>
+<script type="module" src="/src/student.ts"></script>
+</body>
+</html>

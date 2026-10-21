@@ -1,0 +1,22 @@
+{
+  "name": "school-station",
+  "private": true,
+  "version": "2.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "build:student": "tsc --noEmit && vite build --mode student && node -e \"require('fs').copyFileSync('dist-site/student.html','dist-site/index.html')\" && node scripts/pwa.mjs student dist-site",
+    "build:admin": "tsc --noEmit && vite build --mode admin && node scripts/pwa.mjs admin dist-site/admin",
+    "build:site": "npm run build:student && npm run build:admin",
+    "preview": "vite preview",
+    "build:single": "tsc --noEmit && vite build && node scripts/inline.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
+  }
+}
