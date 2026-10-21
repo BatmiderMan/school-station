@@ -2,6 +2,7 @@ import './style.css';
 import { ic, initUi, toast, ANN, annHtml, j2iso, iso2j, daysLeft, isoToday } from './ui';
 import { mkServer } from './server';
 import { mkExams } from './exams';
+import { mkExempt } from './exempt';
 import { initPwa } from './pwa';
 import { snapList } from './store';
 import fontUrl from './assets/vazirmatn-arabic-wght-normal.woff2?url';
@@ -21,7 +22,8 @@ function today(){const p=new Intl.DateTimeFormat('en-u-ca-persian-nu-latn',{year
 /* ---------- data ---------- */
 const W:any=window;
 let D:any=W.__D??null;if(!W.__REMOTE){try{D=JSON.parse(localStorage.getItem(K))}catch(e){}}
-const save=()=>{if(W.__REMOTE){W.__REMOTE.save(D);return}try{localStorage.setItem(K,JSON.stringify(D))}catch(e){}};
+let AP:any=null;
+const save=()=>{try{if(W.__REMOTE)W.__REMOTE.save(D);else localStorage.setItem(K,JSON.stringify(D))}catch(e){}if(AP)AP()};
 function gen(){
   let s=7;const r=()=>{s|=0;s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296};
   const F=['علی','محمد','رضا','امیر','حسین','مهدی','سینا','آرین','پارسا','کیان','نوید','بابک'],L=['احمدی','کریمی','رضایی','حسینی','موسوی','جعفری','صادقی','نظری','کاظمی','فرهادی','مرادی','اکبری'];
@@ -66,7 +68,7 @@ function draw(){ensureNums();ensureEx();if(U.w==null)U.w=wk0();$('#dt').textCont
  const cur=U.p==='sp'?'stu':U.p;$('#nv').innerHTML=PG.map(([k,t,i])=>`<button class="${cur===k?'on':''}" onclick="go('${k}')" aria-label="${t}">${ic(i)}<span>${t}</span>${k==='exm'&&SV.pend()?`<i class="bdg">${n(SV.pend())}</i>`:''}</button>`).join('');
  $('#pt').textContent=U.p==='sp'?'پروفایل دانش‌آموز':(PG.find(p=>p[0]===U.p)||[,''])[1];
  $('#app').classList.remove('in');void ($('#app') as any).offsetWidth;$('#app').classList.add('in');
- $('#app').innerHTML=({home,ex:xpg,stu,exm:()=>EX.page(),ana:()=>EX.page(),ann:annPage,con:()=>SV.conPage(),srv:()=>SV.page(),exp,sp:spage})[U.p]();window.scrollTo(0,0)}
+ $('#app').innerHTML=({home,ex:()=>XM.page(),stu,exm:()=>EX.page(),ana:()=>EX.page(),ann:annPage,con:()=>SV.conPage(),srv:()=>SV.page(),exp,sp:spage})[U.p]();window.scrollTo(0,0)}
 const insSeg=()=>`<div class="seg">${['ماز','قلم‌چی'].map(i=>`<button class="${U.ins===i?'on':''}" onclick="U.ins='${i}';draw()">مبنا: ${i}</button>`).join('')}</div>`;
 const chips=()=>`<div class="seg">${['all',...CL].map(c=>`<button class="${U.cls===c?'on':''}" onclick="U.cls='${c}';draw()">${c==='all'?'همه کلاس‌ها':c}</button>`).join('')}</div>`;
 /* ---------- dashboard ---------- */
@@ -138,8 +140,8 @@ function spage(){const s=D.students.find(x=>x.id===U.sid);if(!s){U.p='stu';retur
   for(let p=0;p<E.per;p++){gr+=`<div class="cp">${n(p+1)}</div>`;for(let d=0;d<4;d++){const st=status(id,cl,w,d,p);if(st)cnt++;gr+=`<div class="cell ${st?'x'+st:''}" style="--gc:${GC[GL.indexOf(letter(d,w))]}"><b>${esc(subj(cl,d,p))}</b><em>${st?({g:'معافیت گروه',f:'معافیت معلم',p:'معافیت پیشرفت'} as any)[st]:'حضور'}</em></div>`}}
   const hist=Object.keys(E.pw).filter(k=>E.pw[k][id]).sort((a,b)=>+b-+a);
   body=`<div class="c"><div class="tb"><b>گروه:</b><select onchange="setG('${id}',this.value)">${['','A','B','C','D'].map(L=>`<option value="${L}" ${(g||'')===L?'selected':''}>${L||'بدون گروه'}</option>`).join('')}</select></div></div>${wnav()}<p class="m">${n(cnt)} ساعت معافیت در این هفته</p>${gr}
-  <div class="g2" style="margin-top:10px"><div class="c"><h3>معافیت پیشرفت این هفته</h3>${pw?`${pw.map((k:string)=>{const[d,p]=k.split('-');return `<span class="tag">${DAYN[+d]} ساعت ${n(+p+1)} ${esc(subj(cl,+d,+p))}</span>`}).join('')}<div style="margin-top:8px"><button class="btn" onclick="revoke('${id}')">لغو</button></div>`:`<button class="btn p" onclick="grant('${id}')">اعطا</button>`}<h3 style="margin-top:14px">درس‌های دلخواه برای معافیت</h3><div class="chips">${subs.map(k=>`<button class="${(E.skip[id]||[]).includes(k)?'on':''}" onclick="tgSkip('${id}','${esc(k)}')">${esc(k)}</button>`).join('')}</div></div>
-  <div class="c"><h3>سابقه‌ی معافیت پیشرفت</h3>${hist.map(k=>`<div class="row" style="cursor:default"><span>هفته‌ی ${jd(dateOf(+k,0))}</span><span class="m">${E.pw[k][id].map((q:string)=>{const[d,p]=q.split('-');return DAYN[+d]+' '+subj(cl,+d,+p)}).join('، ')}</span></div>`).join('')||'<p class="m">تا حالا نداشته</p>'}</div></div>`}
+  <div class="g2" style="margin-top:10px"><div class="c"><h3>معافیت پیشرفت این هفته</h3>${pw?`${pw.map((k:string)=>`<span class="tag">${pkl(cl,k)}</span>`).join('')}<div style="margin-top:8px"><button class="btn" onclick="revoke('${id}')">لغو</button></div>`:`<button class="btn p" onclick="grant('${id}')">اعطا</button>`}<h3 style="margin-top:14px">درس‌های دلخواه برای معافیت</h3><div class="chips">${subs.map(k=>`<button class="${(E.skip[id]||[]).includes(k)?'on':''}" onclick="tgSkip('${id}','${esc(k)}')">${esc(k)}</button>`).join('')}</div></div>
+  <div class="c"><h3>سابقه‌ی معافیت پیشرفت</h3>${hist.map(k=>`<div class="row" style="cursor:default"><span>هفته‌ی ${jd(dateOf(+k,0))}</span><span class="m">${E.pw[k][id].map((q:string)=>pkl(cl,q,true)).join('، ')}</span></div>`).join('')||'<p class="m">تا حالا نداشته</p>'}</div></div>`}
  else{
   if(s.note&&!s.notes){s.notes=[{d:'',x:s.note}];s.note='';save()}const ac=D.srv?.accounts?.[id];
   body=`<div class="g2"><div class="c"><h3>مشخصات</h3><div class="tb" style="flex-direction:column;align-items:stretch"><label class="m">نام <input style="width:100%" value="${esc(s.name)}" onchange="sf('${id}','name',this.value)"></label><label class="m">شماره <input type="number" style="width:100%" value="${s.num??''}" onchange="sf('${id}','num',this.value)"></label><label class="m">کلاس <select style="width:100%" onchange="sf('${id}','cls',this.value)">${CL.map(c=>`<option ${c===s.cls?'selected':''}>${c}</option>`).join('')}</select></label><label class="m">کد ملی <input dir="ltr" inputmode="numeric" maxlength="10" style="width:100%" value="${esc(s.nid||'')}" onchange="sf('${id}','nid',this.value)"></label></div>
@@ -266,13 +268,19 @@ const members=(cl:string,L:string)=>D.students.filter(s=>s.cls===cl&&D.ex.g[s.id
 function tt(cl:string){const E=ensureEx();if(!E.tt[cl])E.tt[cl]=[0,1,2,3].map(()=>[]);E.tt[cl].forEach(r=>{while(r.length<E.per)r.push('')});return E.tt[cl]}
 const subj=(cl:string,d:number,p:number)=>tt(cl)[d][p]||'—';
 const sameCells=(cl:string,d:number,p:number):string[]=>{const E=ensureEx(),sb=(tt(cl)[d][p]||'').trim();if(!sb||E.pair===false)return [cl+'|'+d+'-'+p];const o:string[]=[];for(let d2=0;d2<4;d2++)for(let p2=0;p2<E.per;p2++)if((tt(cl)[d2][p2]||'').trim()===sb)o.push(cl+'|'+d2+'-'+p2);return o};
-const fx=(cl:string,d:number,p:number):string[]=>{const F=ensureEx().fixed,u=new Set<string>();sameCells(cl,d,p).forEach(k=>(F[k]||[]).forEach((id:string)=>u.add(id)));return [...u].filter(id=>nm(id))};
+const fx=(cl:string,d:number,p:number):string[]=>{const E=ensureEx(),F=E.fixed,u=new Set<string>();sameCells(cl,d,p).forEach(k=>(F[k]||[]).forEach((id:string)=>u.add(id)));const sb=(tt(cl)[d][p]||'').trim();if(sb)(((E.fs||{})[cl]||{})[sb]||[]).forEach((id:string)=>u.add(id));return [...u].filter(id=>nm(id))};
+/* معافیت معلم بر اساس «درس» (E.fs[کلاس][درس]) — مستقل از برنامه‌ی ساعتی؛ معافیت‌های ساعتیِ قدیمی (E.fixed) هم حساب می‌شوند */
+function teacherIds(cl:string,sub:string):string[]{const E=ensureEx(),u=new Set<string>((((E.fs||{})[cl]||{})[sub])||[]);Object.keys(E.fixed).forEach(k=>{if(!k.startsWith(cl+'|'))return;const[d,p]=k.split('|')[1].split('-').map(Number);if((((tt(cl)[d]||[])[p])||'').trim()===sub)(E.fixed[k]||[]).forEach((id:string)=>u.add(id))});return [...u].filter(id=>nm(id))}
+const subjectsOf=(cl:string):string[]=>[...new Set<string>([...SUBJ,...(tt(cl).flat().map((x:any)=>String(x||'').trim()).filter(Boolean) as string[]),...Object.keys(((ensureEx().fs||{})[cl])||{})])];
+const teacherSubs=(sid:string,cl:string):string[]=>subjectsOf(cl).filter(s=>teacherIds(cl,s).includes(sid));
+function pwOf(sid:string,w:number,cl:string){return (((ensureEx().pw[w]||{})[sid])||[]).map((k:string)=>{if(k.startsWith('S:'))return{s:k.slice(2)};const[d,p]=k.split('-').map(Number);return{s:subj(cl,d,p),d,p}})}
+const pkl=(cl:string,k:string,short?:boolean)=>{if(k.startsWith('S:'))return esc('یک جلسه از '+k.slice(2));const[d,p]=k.split('-').map(Number);return esc(DAYN[d]+(short?'':' ساعت '+n(p+1))+' '+subj(cl,d,p))};
 const pgIn=(cl:string,w:number,d:number,p:number)=>{const m=ensureEx().pw[w]||{};return Object.keys(m).filter(id=>m[id].includes(d+'-'+p)&&D.students.find(s=>s.id===id&&s.cls===cl))};
 function status(sid:string,cl:string,w:number,d:number,p:number){if(ensureEx().g[sid]===letter(d,w))return 'g';if(fx(cl,d,p).includes(sid))return 'f';if(((ensureEx().pw[w]||{})[sid]||[]).includes(d+'-'+p))return 'p';return null}
 const seg=(k:string,o:string[][])=>`<div class="seg">${o.map(([v,t])=>`<button class="${U[k]===v?'on':''}" onclick="U.${k}='${v}';draw()">${t}</button>`).join('')}</div>`;
 const wstep=(k:number)=>{U.w=k===0?wk0():U.w+k;draw()};
 const rotBar=()=>`<div class="tb"><span class="m">گروهِ روز شنبه در این هفته:</span><div class="seg" style="margin:0">${GL.map(L=>`<button class="${letter(0,U.w)===L?'on':''}" onclick="setRot('${L}')">گروه ${L}</button>`).join('')}</div><span class="m">هفته‌های بعد خودکار می‌چرخد</span></div>`;
-function setRot(L:string){const E=ensureEx(),i=GL.indexOf(L);E.rot=(((i-U.w)%4)+4)%4;save();draw();toast('ترتیب تنظیم شد: '+[0,1,2,3].map(d=>letter(d,U.w)).join(' ← ')+' (برای دانش‌آموزان در «سرور ← انتشار» منتشر کنید)')}
+function setRot(L:string){const E=ensureEx(),i=GL.indexOf(L);E.rot=(((i-U.w)%4)+4)%4;save();draw();toast('ترتیب تنظیم شد: '+[0,1,2,3].map(d=>letter(d,U.w)).join(' ← ')+'')}
 const wnav=()=>`<div class="tb"><button class="btn" onclick="wstep(-1)">▶</button><b>${jd(dateOf(U.w,0))} تا ${jd(dateOf(U.w,3))}</b><button class="btn" onclick="wstep(1)">◀</button>${U.w!==wk0()?`<button class="btn" onclick="wstep(0)">هفته‌ی جاری</button>`:'<span class="tag">هفته‌ی جاری</span>'}</div>`;
 const exmx=()=>seg('es',[['g','📋 گزارش آزمون'],['r','ثبت آزمون ماز/قلم‌چی'],['s','اسکن کارنامه'],['h','آزمون‌های مدرسه']])+({g:repg,r:exm,s:scn,h:schp} as any)[U.es]();
 const hue=(v:number)=>`background:hsl(${Math.max(0,Math.min(120,v*1.3))} 60% 45% / .25)`;
@@ -336,7 +344,7 @@ function cellm(d:number,p:number){const cl=U.xc,w=U.w,L=letter(d,w),key=d+'-'+p,
  <div class="c"><h3 style="color:${GC[GL.indexOf(L)]}">معافیت گروه ${L} (${n(gm.length)})</h3><p class="m" style="margin:0">${esc(names(gm,30))||'گروهی تعیین نشده'}</p></div>
  <div class="c" style="margin-top:10px"><h3>معافیت معلم — هر هفته</h3>${sameCells(cl,d,p).length>1?`<p class="m" style="margin:0 0 8px">این درس ${n(sameCells(cl,d,p).length)} جلسه در هفته دارد؛ انتخاب‌ها برای همه‌ی جلسه‌ها اعمال می‌شود.</p>`:''}<div class="chk">${all.map(s=>`<label><input type="checkbox" ${fl.includes(s.id)?'checked':''} onchange="tgFx('${cl}','${key}','${s.id}',this.checked)"> ${esc(s.name)}</label>`).join('')}</div></div>
  <div class="c" style="margin-top:10px"><h3>معافیت پیشرفت — فقط این هفته</h3>${pg.map(id=>`<div class="row" style="cursor:default"><span>${esc(nm(id))}</span><button class="btn" onclick="rmPw('${id}','${key}')">حذف</button></div>`).join('')}<select onchange="addPw(this.value,'${key}')"><option value="">افزودن دانش‌آموز…</option>${all.filter(s=>!status(s.id,cl,w,d,p)).map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select></div>`;$('#md').classList.add('on')}
-function tgFx(cl:string,key:string,id:string,on:boolean){const E=ensureEx(),[d,p]=key.split('-').map(Number),ks=sameCells(cl,d,p);if(!ks.includes(cl+'|'+key))ks.push(cl+'|'+key);ks.forEach(k=>{const a=(E.fixed[k]||[]).filter((x:string)=>x!==id);if(on)a.push(id);E.fixed[k]=a});save();cellm(d,p)}
+function tgFx(cl:string,key:string,id:string,on:boolean){const E=ensureEx(),[d,p]=key.split('-').map(Number),ks=sameCells(cl,d,p);if(!ks.includes(cl+'|'+key))ks.push(cl+'|'+key);ks.forEach(k=>{const a=(E.fixed[k]||[]).filter((x:string)=>x!==id);if(on)a.push(id);E.fixed[k]=a});if(!on){const sb=(tt(cl)[d][p]||'').trim(),fs=((E.fs||{})[cl]||{});if(sb&&fs[sb])fs[sb]=fs[sb].filter((x:string)=>x!==id)}save();cellm(d,p)}
 function addPw(id:string,key:string){if(!id)return;const E=ensureEx(),m=(E.pw[U.w]=E.pw[U.w]||{}),a=(m[id]=m[id]||[]);if(a.length>=2&&!confirm('این دانش‌آموز قبلاً ۲ ساعت معافیت پیشرفت دارد؛ باز هم اضافه شود؟'))return;a.push(key);save();cellm(U.cmd[0],U.cmd[1])}
 function rmPw(id:string,key:string){const m=ensureEx().pw[U.w]||{};m[id]=(m[id]||[]).filter(k=>k!==key);if(!m[id].length)delete m[id];save();cellm(U.cmd[0],U.cmd[1])}
 /* groups */
@@ -379,7 +387,8 @@ function xprog(){const cl=U.xc,w=U.w,E=ensureEx(),ss=snap().filter(s=>s.cls===cl
  return insSeg()+wnav()+`<p class="m">۱) درس‌هایی که هر دانش‌آموز نمی‌خواهد در آن‌ها حاضر شود را انتخاب کنید. ۲) فقط درس‌های برنامه‌ی همین کلاس نمایش داده می‌شود (درس دو جلسه‌ای یک‌بار). «اعطا» دو ساعت از همان درس‌ها را که در این هفته معاف نیست خودکار تعیین می‌کند (در تقویم قابل تغییر است).</p><div class="c tw"><table><thead><tr><th>دانش‌آموز</th><th>تراز</th><th>درس‌های دلخواه برای معافیت</th><th>این هفته</th></tr></thead><tbody>${ss.sort((a,b)=>(b.l||0)-(a.l||0)).map(s=>`<tr style="cursor:default"><td>${esc(s.name)}${sug.has(s.id)?' <span class="tag">پیشنهاد</span>':''}</td><td>${n(s.l)} ${dl(s.d)}</td><td style="white-space:normal"><div class="chips" style="margin:0">${subs.map(k=>`<button class="${(E.skip[s.id]||[]).includes(k)?'on':''}" onclick="tgSkip('${s.id}','${esc(k)}')">${esc(k)}</button>`).join('')}</div></td><td style="white-space:normal">${pw[s.id]?`${pw[s.id].map(k=>{const[d,p]=k.split('-');return `<span class="tag">${DAYN[+d]} ساعت ${n(+p+1)} ${esc(subj(cl,+d,+p))}</span>`}).join('')} <button class="btn" onclick="revoke('${s.id}')">لغو</button>`:`<button class="btn p" onclick="grant('${s.id}')">اعطا</button>`}</td></tr>`).join('')}</tbody></table></div>`}
 function tgSkip(id:string,k:string){const E=ensureEx(),a=E.skip[id]||[];E.skip[id]=a.includes(k)?a.filter(x=>x!==k):[...a,k];save();draw()}
 function grant(id:string){const s=D.students.find(x=>x.id===id),keys=pickKeys(s.cls,id,U.w);
- if(!keys.length){alert('هیچ کلاسی مناسب نیست: یا درس دلخواه انتخاب نشده، یا همه‌ی ساعت‌های آن درس در این هفته به‌خاطر معافیت گروه/معلم از قبل معاف است.');return}
+ if(!keys.length&&!tt(s.cls).flat().some(Boolean)){const sk=(ensureEx().skip[id]||[]).slice(0,2);if(sk.length){const E=ensureEx();(E.pw[U.w]=E.pw[U.w]||{})[id]=sk.map((x:string)=>'S:'+x);save();draw();return}alert('اول در ستون «درس‌های دلخواه» چند درس را علامت بزنید.');return}
+  if(!keys.length){alert('هیچ کلاسی مناسب نیست: یا درس دلخواه انتخاب نشده، یا همه‌ی ساعت‌های آن درس در این هفته به‌خاطر معافیت گروه/معلم از قبل معاف است.');return}
  if(keys.length<2)alert('فقط یک ساعت مناسب پیدا شد (ساعت‌هایی که از قبل معاف است حساب نمی‌شود). درس دلخواه بیشتری انتخاب کنید.');
  const E=ensureEx();(E.pw[U.w]=E.pw[U.w]||{})[id]=keys;save();draw()}
 function revoke(id:string){const m=ensureEx().pw[U.w]||{};delete m[id];save();draw()}
@@ -402,9 +411,11 @@ function svgOf(cl:string,w:number,sv:string,font:string){const E=ensureEx(),W=94
 async function xpng(){const sv=U.sv&&D.students.find(s=>s.id===U.sv&&s.cls===U.xc)?U.sv:'',svg=svgOf(U.xc,U.w,sv,await fontB64());
  const img=new Image();img.onload=()=>{const k=2,cv=document.createElement('canvas');cv.width=img.width*k;cv.height=img.height*k;const c=cv.getContext('2d');c.scale(k,k);c.drawImage(img,0,0);cv.toBlob(b=>saveFile(`${U.xc}-${sv?nm(sv)+'-':''}هفته.png`,b),'image/png')};
  img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg)}
-const SV=mkServer({get D(){return D},annActive:()=>annActive(),sexams,save,draw:()=>draw(),esc,n,saveFile,ensureEx,tt,status,letter,dateOf,wk0,commit:(f:any)=>commit(f),CFG,U});
+const SV=mkServer({get D(){return D},annActive:()=>annActive(),toast,teacherSubs,pwOf,sexams,save,draw:()=>draw(),esc,n,saveFile,ensureEx,tt,status,letter,dateOf,wk0,commit:(f:any)=>commit(f),CFG,U});
 const EX=mkExams({get D(){return D},U,save,draw:()=>draw(),esc,n,n1,avg,line,hue,spark,CL,byNum,today,SV,scn,schp:()=>schp(),FILES:()=>FILES,dlf:(...a:any[])=>(dlf as any)(...a),toast});
-Object.assign(W,SV.h,EX.h);
+const XM=mkExempt({get D(){return D},U,CL,GL,GC,DAYN,SUBJ,letter,members,nm,names,dateOf,jd,wk0,mid,ensureEx,tt,subj,esc,n,save,draw:()=>draw(),byNum,toast,wnav,rotBar,xgrp,xtt,snap,dl,insSeg,pkl,teacherIds,teacherSubs,fontB64,saveFile:(a:any,b:any)=>saveFile(a,b)});
+AP=SV.autoPub;
+Object.assign(W,SV.h,EX.h,XM.h);
 SV.init();
 /* ---------- آزمون‌های مدرسه (فقط نمره‌ی هر درس؛ بدون معدل) ---------- */
 function mkSch(t:string,date:string,c:string){const ls=[...new Set(tt(c).flat().filter(Boolean))].map((name:string)=>({name,max:20}));const id='h'+Date.now().toString(36);ensureSch().exams.push({id,title:t,date,cls:c,lessons:ls,sc:{}});U.sx=id;save()}
@@ -443,7 +454,7 @@ function annPage(){D.ann=D.ann||[];U.at=U.at||'exam';const AD=U.ad||{},act=annAc
 function annOnly(){const v=$('#aev').value;if(!v){alert('اول تاریخ رویداد را انتخاب کنید.');return}$('#ast').value=v;$('#aexp').value=v}
 const annType=(k:string)=>{annKeep();U.at=k;draw()};
 function annExp(d:number){const t=new Date();t.setDate(t.getDate()+d);const iso=`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;$('#aexp').value=iso2j(iso)}
-function annSync(){return SV.h.annSync().then(()=>toast('برای دانش‌آموزان منتشر شد ✓')).catch(()=>toast('ذخیره شد. برای نمایش به دانش‌آموزان، در تب «سرور» وارد شوید و «انتشار همه» را بزنید.'))}
+function annSync(){return SV.h.annSync().then(()=>toast('برای دانش‌آموزان منتشر شد ✓')).catch(()=>toast('ذخیره شد. برای نمایش به دانش‌آموزان، در تب «سرور» وارد شوید؛ بعد از ورود خودکار منتشر می‌شود.'))}
 function annNew(){const t=$('#at').value.trim();if(!t){alert('عنوان را بنویسید.');return}
  const evT=$('#aev').value.trim(),evI=evT?j2iso(evT):null,expT=$('#aexp').value.trim();if(evT&&!evI){alert('تاریخ رویداد را به شکل 1405/08/24 بنویسید.');return}
  let exp=expT?j2iso(expT):(evI||(()=>{const d=new Date();d.setDate(d.getDate()+7);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`})());

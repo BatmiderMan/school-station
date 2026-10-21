@@ -46,7 +46,7 @@ export function mkServer(A: any) {
   const pend = () => S.inbox.length + (S.sc || 0);
   async function init() {
     S.inbox = (await kvGet('inbox').catch(() => null)) || [];
-    if (cfgOk) { const { data } = await sb.auth.getSession(); S.user = data.session?.user || null; if (S.user) { await chk().catch(() => 0); if (S.mgr) { consLoad().then(draw); repLoad().then(draw); refreshPend().then(draw); } } }
+    if (cfgOk) { const { data } = await sb.auth.getSession(); S.user = data.session?.user || null; if (S.user) { await chk().catch(() => 0); if (S.mgr) { consLoad().then(draw); repLoad().then(draw); refreshPend().then(draw); autoPub(); } } }
     draw();
   }
   async function login() {
@@ -54,7 +54,7 @@ export function mkServer(A: any) {
     S.busy = true; draw();
     const { data, error } = await sb.auth.signInWithPassword({ email, password });
     if (error) { say('ورود ناموفق: ' + error.message); return; }
-    S.user = data.user; await chk().catch(() => 0); if (S.mgr) { consLoad().then(draw); repLoad().then(draw); refreshPend().then(draw); }
+    S.user = data.user; await chk().catch(() => 0); if (S.mgr) { consLoad().then(draw); repLoad().then(draw); refreshPend().then(draw); autoPub(); }
     say(S.mgr ? '' : 'این حساب در جدول managers نیست (مرحله‌ی ۴ راهنما).');
   }
   async function logout() { await sb.auth.signOut(); S.user = null; S.mgr = null; S.msg = ''; draw(); }
@@ -155,8 +155,10 @@ export function mkServer(A: any) {
   /* ---- publish ---- */
   function calOf(lid: string, cls: string, w: number) {
     const E = A.ensureEx();
-    return { per: E.per, days: [0, 1, 2, 3].map((d) => ({ d, date: A.dateOf(w, d).toISOString().slice(0, 10), L: A.letter(d, w), cells: Array.from({ length: E.per }, (_, p) => ({ s: A.tt(cls)[d][p] || '—', t: A.status(lid, cls, w, d, p) })) })) };
+    // gx: امروز نوبت گروهِ این دانش‌آموز است (معافیت کل روز، مستقل از برنامه‌ی ساعتی)؛ f: درس‌های معافیت معلم؛ p: معافیت پیشرفتِ «درسی» بدون ساعت
+    return { per: E.per, f: A.teacherSubs(lid, cls), p: A.pwOf(lid, w, cls).filter((x: any) => x.d == null), days: [0, 1, 2, 3].map((d) => ({ d, date: A.dateOf(w, d).toISOString().slice(0, 10), L: A.letter(d, w), gx: E.g[lid] === A.letter(d, w), cells: Array.from({ length: E.per }, (_, p) => ({ s: A.tt(cls)[d][p] || '—', t: A.status(lid, cls, w, d, p) })) })) };
   }
+  const lastSig: Record<string, string> = {}; // آخرین نسخه‌ی ارسال‌شده‌ی هر ردیف؛ برای ارسال فقط موارد تغییرکرده
   async function publish(lids?: string[]) {
     const acc = sd().accounts, list = (lids || Object.keys(acc)).filter((l) => acc[l] && stu(l)), ex: any[] = [], cal: any[] = [], w0 = A.wk0();
     list.forEach((l) => {
@@ -164,7 +166,10 @@ export function mkServer(A: any) {
       A.D.exams.forEach((e: any) => { const r = e.res[l]; if (r) ex.push({ student_id: acc[l].sid, exam_key: e.inst + '|' + e.date, title: e.title, inst: e.inst, date: e.date, level: r.level, rank: r.rank ?? null, subj: r.subj || {} }); });
       for (let w = w0; w < w0 + 4; w++) { const c = calOf(l, st.cls, w); cal.push({ student_id: acc[l].sid, week_start: c.days[0].date, data: c }); }
     });
-    const up = async (t: string, rows: any[], key: string) => { for (let i = 0; i < rows.length; i += 400) { const { error } = await sb.from(t).upsert(rows.slice(i, i + 400), { onConflict: key }); if (error) throw error; } };
+    const up = async (t: string, rows: any[], key: string) => {
+      const ks = key.split(','), ch = rows.map((r) => ({ r, k: t + '|' + ks.map((c) => r[c]).join('|'), v: JSON.stringify(r) })).filter((x) => lastSig[x.k] !== x.v);
+      for (let i = 0; i < ch.length; i += 400) { const part = ch.slice(i, i + 400), { error } = await sb.from(t).upsert(part.map((x) => x.r), { onConflict: key }); if (error) throw error; part.forEach((x) => { lastSig[x.k] = x.v; }); }
+    };
     await up('exams_pub', ex, 'student_id,exam_key'); await up('calendar_pub', cal, 'student_id,week_start');
     const sch: any[] = [];
     A.sexams().forEach((e: any) => {
@@ -187,10 +192,26 @@ export function mkServer(A: any) {
     const keep = new Set(rows.map((r: any) => r.id)), del = (data || []).filter((r: any) => !keep.has(r.id)).map((r: any) => r.id);
     if (del.length) await sb.from('announcements').delete().in('id', del);
   }
-  async function publishAll() { S.busy = true; S.msg = 'در حال انتشار…'; draw(); try { await publish(); say('انتشار انجام شد.'); } catch (e: any) { say('خطا: ' + (e.message || e)); } }
+  /* ---- انتشار خودکار: بعد از هر تغییر (با ۲٫۵ ثانیه تأخیر) ---- */
+  let apT: any = 0, apBusy = false, apAgain = false;
+  async function apRun() {
+    if (apBusy) { apAgain = true; return; }
+    apBusy = true;
+    try { await publish(); S.auto = { st: 'ok', at: new Date().toLocaleTimeString('fa-IR') }; }
+    catch (e: any) { S.auto = { st: 'err', msg: e?.message || String(e) }; if (A.toast) A.toast('همگام‌سازی با دانش‌آموزان ناموفق: ' + S.auto.msg); }
+    apBusy = false;
+    if (apAgain) { apAgain = false; autoPub(); }
+    else if (A.U.p === 'srv') draw();
+  }
+  function autoPub() {
+    if (!cfgOk || !S.user || S.mgr !== true || !Object.keys(sd().accounts).length) return;
+    S.auto = { st: 'wait' }; clearTimeout(apT); apT = setTimeout(apRun, 2500);
+  }
+  async function publishAll() { Object.keys(lastSig).forEach((k) => delete lastSig[k]); S.busy = true; S.msg = 'در حال انتشار…'; draw(); try { await publish(); say('انتشار انجام شد.'); } catch (e: any) { say('خطا: ' + (e.message || e)); } }
 
   /* ---- views ---- */
-  const tabs = () => `<div class="seg">${[['acc', '👤 حساب دانش‌آموزان'], ['pub', '🚀 انتشار']].map(([k, t]) => `<button class="${S.tab === k ? 'on' : ''}" onclick="srvTab('${k}')">${t}</button>`).join('')}</div>`;
+  const tabs = () => '';
+  const tabsOld = () => `<div class="seg">${[['acc', '👤 حساب دانش‌آموزان']].map(([k, t]) => `<button class="${S.tab === k ? 'on' : ''}" onclick="srvTab('${k}')">${t}</button>`).join('')}</div>`;
   function acc() {
     const ss = [...A.D.students].sort((a: any, b: any) => a.cls.localeCompare(b.cls, 'fa') || (a.num || 1e9) - (b.num || 1e9));
     const creds = S.creds ? `<div class="c" style="border-color:var(--ok)"><h3>🔑 اطلاعات ورود (فقط همین‌جا دیده می‌شود)</h3><div class="tw"><table><thead><tr><th>نام</th><th>کلاس</th><th>نام کاربری</th><th>رمز</th></tr></thead><tbody>${S.creds.map((c: any) => `<tr style="cursor:default"><td>${esc(c.name)}</td><td>${c.cls}</td><td dir="ltr">${esc(c.user)}</td><td dir="ltr"><b>${esc(c.pass)}</b></td></tr>`).join('')}</tbody></table></div><div class="tb" style="margin-top:8px"><button class="btn p" onclick="srvCsv()">دانلود CSV</button><button class="btn" onclick="window.print()">چاپ</button><button class="btn" onclick="S_.creds=null;draw()">بستن</button></div></div>` : '';
@@ -212,11 +233,15 @@ export function mkServer(A: any) {
       <div class="tb" style="margin:8px 0 0">${v.ok ? `<button class="btn p" onclick="srvApp(${i},'sys')">تأیید و انتشار</button>` : `${v.exam ? `<button class="btn p" onclick="srvApp(${i},'sys')">تأیید (خوانش سیستم)</button>` : ''}<button class="btn" onclick="srvApp(${i},'sub')">تأیید (اعداد ارسالی)</button>`}<button class="btn" style="color:var(--bad)" onclick="srvRej(${i})">رد</button></div></div>`; }).join('');
     return top + cards;
   }
-  const pub = () => { const k = Object.keys(sd().accounts).length; return `<div class="c"><h3>انتشار برای دانش‌آموزان</h3><p class="m">نتایج تأییدشده (تراز، رتبه و درصد دروس) و تقویم معافیت ۴ هفته‌ی آینده‌ی ${n(k)} دانش‌آموز دارای حساب روی سرور قرار می‌گیرد. هر بار که معافیت‌ها را عوض کردید یا آزمون ثبت کردید، یک‌بار بزنید. (تأیید در صندوق ورودی خودش منتشر می‌کند.)</p><button class="btn p" onclick="srvPub()">🚀 انتشار همه</button>${S.schErr ? `<p class="dn">${esc(S.schErr)}</p>` : ''}${S.annErr ? `<p class="dn">${esc(S.annErr)}</p>` : ''}${S.last ? `<p class="m">آخرین انتشار ${S.last.at}: ${n(S.last.n)} نفر، ${n(S.last.ex)} نتیجه</p>` : ''}</div>`; };
+  // وضعیت همگام‌سازی خودکار با پنل دانش‌آموزان
+  const pub = () => {
+    const a = S.auto || {}, st = a.st === 'wait' ? '⏳ در حال همگام‌سازی…' : a.st === 'err' ? '⚠ همگام‌سازی ناموفق' : a.st === 'ok' ? `✅ همه‌چیز برای دانش‌آموزان به‌روز است (${a.at})` : '🔄 خودکار';
+    return `<div class="c np" style="margin-bottom:10px"><div class="tb" style="margin:0"><div style="flex:1;min-width:200px"><b>${st}</b><div class="m">معافیت‌ها، نتایج آزمون، اطلاعیه‌ها و نمرات بعد از هر تغییر خودکار برای دانش‌آموزان به‌روز می‌شود؛ نیازی به «انتشار» نیست.</div>${a.st === 'err' ? `<div class="dn">${esc(a.msg)}</div>` : ''}${S.schErr ? `<div class="dn">${esc(S.schErr)}</div>` : ''}${S.annErr ? `<div class="dn">${esc(S.annErr)}</div>` : ''}</div><button class="btn" onclick="srvPub()" title="اگر شک دارید، همه‌چیز را دوباره بفرستید">🔄 ارسال مجدد همه</button></div></div>`;
+  };
   function page() {
     if (!cfgOk) return `<div class="c"><h3>اتصال به سرور تنظیم نشده</h3><p>فایل <code dir="ltr">src/config.ts</code> را با آدرس و کلید عمومی پروژه‌ی Supabase پر کنید (راهنما: SETUP.md).</p></div>`;
     if (!S.user) return `<div class="c" style="max-width:380px;margin:auto"><h3>ورود مدیر</h3>${S.msg ? `<p class="dn">${esc(S.msg)}</p>` : ''}<div class="tb" style="flex-direction:column;align-items:stretch"><input id="sv_e" dir="ltr" type="email" placeholder="ایمیل مدیر"><input id="sv_p" dir="ltr" type="password" placeholder="رمز"><button class="btn p" onclick="srvLogin()" ${S.busy ? 'disabled' : ''}>ورود</button></div></div>`;
-    return `<div class="tb np"><span class="m">متصل: <span dir="ltr">${esc(S.user.email)}</span></span><button class="btn" onclick="srvOut()">خروج</button></div>` + (S.mgr === false ? `<div class="c dn">این حساب مدیر نیست (راهنما، مرحله‌ی ۴).</div>` : S.mgr === null ? '' : `<div class="np">${tabs()}</div>${S.msg ? `<div class="c np" style="margin-bottom:10px">${S.busy ? '⏳ ' : ''}${esc(S.msg)}</div>` : ''}${(({ acc, pub }) as any)[S.tab]?.() ?? acc()}`);
+    return `<div class="tb np"><span class="m">متصل: <span dir="ltr">${esc(S.user.email)}</span></span><button class="btn" onclick="srvOut()">خروج</button></div>` + (S.mgr === false ? `<div class="c dn">این حساب مدیر نیست (راهنما، مرحله‌ی ۴).</div>` : S.mgr === null ? '' : `<div class="np">${tabs()}</div>${S.msg ? `<div class="c np" style="margin-bottom:10px">${S.busy ? '⏳ ' : ''}${esc(S.msg)}</div>` : ''}${pub()}${acc()}`);
   }
   /* ---- وقت مشاوره (فقط تحصیلی) ---- */
   const av = () => (A.D.avail = A.D.avail || { len: 20, days: { 0: { on: 1, f: '10:00', t: '12:00' }, 1: { on: 1, f: '10:00', t: '12:00' }, 3: { on: 1, f: '10:00', t: '12:00' }, 4: { on: 1, f: '10:00', t: '12:00' } } });
@@ -291,5 +316,5 @@ export function mkServer(A: any) {
   }
   const badge = () => (S.cons.filter((r: any) => r.status === 'pending').length ? `<div class="c" style="margin-bottom:10px;cursor:pointer;border-inline-start:5px solid #8b5cf6" onclick="srvGoCon()">💬 ${n(S.cons.filter((r: any) => r.status === 'pending').length)} درخواست وقت مشاوره منتظر شماست</div>` : '') + (pend() ? `<div class="c" style="margin-bottom:10px;cursor:pointer;border-inline-start:5px solid #f59e0b" onclick="srvGo()">📥 ${n(pend())} کارنامه منتظر بررسی شما است</div>` : '');
   const h = { conTab: (k: string) => { S.ct = k; S.cform = ''; draw(); }, conForm: (id: string) => { S.cform = id; draw(); }, conPick: (id: string, iso: string, t: string) => { (document.getElementById('cd_' + id) as HTMLInputElement).value = iso2j(iso); (document.getElementById('ct_' + id) as HTMLInputElement).value = t; }, conDay: (iso: string) => { S.cdSel = iso; S.cform = ''; draw(); }, conCalNav: (k: number) => { if (k === 0) { S.cm = null; S.cdSel = isoToday(); } else { S.cm.m += k; if (S.cm.m > 12) { S.cm.m = 1; S.cm.y++; } if (S.cm.m < 1) { S.cm.m = 12; S.cm.y--; } } draw(); }, conAvLen: (v: string) => { av().len = +v; A.save(); }, conAvDay: (i: number, k: string, v: any) => { const a = av(); a.days[i] = a.days[i] || { on: 0, f: '10:00', t: '12:00' }; a.days[i][k] = v; A.save(); }, conSave, conReject, conBack, conDone, conRefresh: async () => { await consLoad(); say(''); }, conDelArc: (i: number) => { if (!confirm('از بایگانی حذف شود؟')) return; A.D.consult.splice(i, 1); A.save(); draw(); }, srvGoPage: () => { A.U.p = 'srv'; draw(); }, srvGoCon: () => { A.U.p = 'con'; S.ct = 'new'; draw(); }, annSync: async () => { if (!S.user || !S.mgr) throw new Error('login'); await syncAnn(); }, srvDr: (lid: string, k: string, val: string) => { (S.dr[lid] = S.dr[lid] || {})[k] = val.trim(); }, srvLogin: login, srvOut: logout, srvTab: (k: string) => { S.tab = k; S.msg = ''; draw(); }, srvOne: createOne, srvBulk: bulk, srvPass: pass, srvRep: rep, srvToggle: toggle, srvDel: del, srvCsv: csv, srvFirst: (v: boolean) => { sd().firstOnly = v; A.save(); }, srvFetch: fetchInbox, srvApp: approve, srvAll: approveAll, srvRej: reject, srvPub: publishAll, srvGo: () => { A.U.X = A.U.X || {}; A.U.X.tab = 'in'; A.U.p = 'exm'; draw(); }, S_: S };
-  return { page, conPage, badge, init, h, inbox: inb, pend, refreshPend };
+  return { page, conPage, badge, init, h, inbox: inb, pend, refreshPend, autoPub };
 }

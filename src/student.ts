@@ -74,9 +74,14 @@ function loginView() {
   return `<div class="c" style="max-width:360px;margin:30px auto"><h3 style="font-size:18px">ورود به پنل دانش‌آموز</h3><p class="m">نام کاربری و رمز را مدیر مدرسه به شما داده است.</p>${T.login ? `<p class="dn">${T.login}</p>` : ''}<div class="tb" style="flex-direction:column;align-items:stretch"><input id="lu" dir="ltr" placeholder="نام کاربری" autocapitalize="off"><input id="lp" dir="ltr" type="password" placeholder="رمز" onkeydown="if(event.key==='Enter')login()"><button class="btn p" onclick="login()" ${T.busy ? 'disabled' : ''}>${T.busy ? '…' : 'ورود'}</button></div></div>`;
 }
 const days = () => T.cal.flatMap((r: any) => r.data.days);
+// برنامه‌ی ساعتی وارد نشده باشد، همه‌ی ساعت‌ها «—» هستند؛ آن‌وقت نمای روزمحور نشان می‌دهیم
+const noTT = (d: any) => d.cells.every((x: any) => x.s === '—');
+const gxOf = (d: any) => (d.gx != null ? d.gx : d.cells.some((x: any) => x.t === 'g'));
+const extras = (D: any) => (D.f?.length ? `<div class="c" style="margin-top:10px">🎓 <b>معافیت معلم:</b> ${D.f.map((x: string) => `<span class="tag xf">${esc(x)}</span>`).join('')} <span class="m">در هر جلسه‌ی این درس‌ها</span></div>` : '') + (D.p?.length ? `<div class="c" style="margin-top:10px">🚀 <b>معافیت پیشرفت این هفته:</b> ${D.p.map((x: any) => `<span class="tag xp">یک جلسه از ${esc(x.s)}</span>`).join('')}</div>` : '');
 function dayCard(d: any, lab: string) {
-  const c = GC[GL.indexOf(d.L)], ex = d.cells.filter((x: any) => x.t).length;
-  return `<div class="c hc" style="--gc:${c};cursor:default"><div class="hl">${d.L}</div><div style="flex:1"><b>${lab} — ${DAYN[d.d]} ${jdate(d.date)}</b><div class="m">${ex ? `${n(ex)} از ${n(d.cells.length)} ساعت معافی` : 'همه‌ی ساعت‌ها حضور'}</div><div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">${d.cells.map((x: any) => `<span class="tag ${x.t ? 'x' + x.t : ''}" style="padding:2px 8px">${esc(x.s)}${x.t ? ' · ' + STN[x.t].replace('معاف ', '') : ''}</span>`).join('')}</div></div></div>`;
+  const c = GC[GL.indexOf(d.L)], ex = d.cells.filter((x: any) => x.t).length, nt = noTT(d);
+  const msg = nt ? (gxOf(d) ? '🎉 معافی (کل روز)' : 'حضور در کلاس') : ex ? `${n(ex)} از ${n(d.cells.length)} ساعت معافی` : 'همه‌ی ساعت‌ها حضور';
+  return `<div class="c hc" style="--gc:${c};cursor:default"><div class="hl">${d.L}</div><div style="flex:1"><b>${lab} — ${DAYN[d.d]} ${jdate(d.date)}</b><div class="m">${msg}</div>${nt ? '' : `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">${d.cells.map((x: any) => `<span class="tag ${x.t ? 'x' + x.t : ''}" style="padding:2px 8px">${esc(x.s)}${x.t ? ' · ' + STN[x.t].replace('معاف ', '') : ''}</span>`).join('')}</div>`}</div></div>`;
 }
 function home() {
   const iso = todayIso(), ds = days(), td = ds.find((d: any) => d.date === iso), nx = ds.find((d: any) => d.date > iso);
@@ -123,9 +128,10 @@ function ann() { return T.ann.length ? T.ann.map((a: any) => annHtml(a)).join(''
 function cal() {
   const r = T.cal[T.wi]; if (!r) return `<div class="c m">تقویم هنوز منتشر نشده است.</div>`;
   const D = r.data, last = T.cal.length - 1;
-  let g = `<div class="cal"><div></div>${D.days.map((d: any) => `<div class="ch" style="--gc:${GC[GL.indexOf(d.L)]}"><b>${DAYN[d.d]}</b><span>${jdate(d.date)}</span><i>${d.L}</i></div>`).join('')}`;
-  for (let p = 0; p < D.per; p++) { g += `<div class="cp">${n(p + 1)}</div>`; D.days.forEach((d: any) => { const x = d.cells[p]; g += `<div class="cell ${x.t ? 'x' + x.t : ''}" style="--gc:${GC[GL.indexOf(d.L)]}"><b>${esc(x.s)}</b><em>${x.t ? STN[x.t] : 'حضور'}</em></div>`; }); }
-  return `<div class="tb"><button class="btn" ${T.wi >= last ? 'disabled' : ''} onclick="T.wi++;draw()">◀</button><b>هفته‌ی ${jdate(D.days[0].date)} تا ${jdate(D.days[3].date)}</b><button class="btn" ${T.wi <= 0 ? 'disabled' : ''} onclick="T.wi--;draw()">▶</button></div>${g}
+  const nt = D.days.every(noTT);
+  let g = nt ? `<div class="g2">${D.days.map((d: any) => { const c = GC[GL.indexOf(d.L)]; return `<div class="c" style="border-top:4px solid ${c}"><div class="tb" style="margin-bottom:6px"><b>${DAYN[d.d]}</b><span class="m">${jdate(d.date)}</span><span style="flex:1"></span><span class="tag" style="background:${c};color:#fff;border-color:${c}">گروه ${d.L}</span></div>${gxOf(d) ? '<b class="up">🎉 معاف (کل روز)</b>' : '<span class="m">حضور در کلاس</span>'}</div>`; }).join('')}</div>` : `<div class="cal"><div></div>${D.days.map((d: any) => `<div class="ch" style="--gc:${GC[GL.indexOf(d.L)]}"><b>${DAYN[d.d]}</b><span>${jdate(d.date)}</span><i>${d.L}</i></div>`).join('')}`;
+  if (!nt) for (let p = 0; p < D.per; p++) { g += `<div class="cp">${n(p + 1)}</div>`; D.days.forEach((d: any) => { const x = d.cells[p]; g += `<div class="cell ${x.t ? 'x' + x.t : ''}" style="--gc:${GC[GL.indexOf(d.L)]}"><b>${esc(x.s)}</b><em>${x.t ? STN[x.t] : 'حضور'}</em></div>`; }); }
+  return `<div class="tb"><button class="btn" ${T.wi >= last ? 'disabled' : ''} onclick="T.wi++;draw()">◀</button><b>هفته‌ی ${jdate(D.days[0].date)} تا ${jdate(D.days[3].date)}</b><button class="btn" ${T.wi <= 0 ? 'disabled' : ''} onclick="T.wi--;draw()">▶</button></div>${g}${extras(D)}
   <p class="m" style="margin-top:10px"><span class="tag xg">معاف (گروه)</span> <span class="tag xf">معاف (معلم)</span> <span class="tag xp">معاف (پیشرفت)</span></p>`;
 }
 
@@ -139,17 +145,19 @@ function rcal() {
   const days0 = rows[0].data.days, di = Math.min(T.rd, days0.length - 1), d0 = days0[di];
   const tabs = `<div class="seg">${days0.map((d: any, i: number) => `<button class="${i === di ? 'on' : ''}" onclick="T.rd=${i};draw()">${DAYN[d.d]} ${jdate(d.date)}</button>`).join('')}</div>`;
   const c = GC[GL.indexOf(d0.L)], per = d0.cells.length;
-  const head = `<tr><th>دانش‌آموز</th>${d0.cells.map((x: any, p: number) => `<th style="text-align:center">${n(p + 1)}<br><span class="m">${esc(x.s)}</span></th>`).join('')}<th style="text-align:center">جمع</th></tr>`;
+  const nt = rows.every((r: any) => r.data.days.every(noTT));
+  const head = nt ? `<tr><th>دانش‌آموز</th><th style="text-align:center">این روز</th><th>معافیت‌های درسی این هفته</th></tr>` : `<tr><th>دانش‌آموز</th>${d0.cells.map((x: any, p: number) => `<th style="text-align:center">${n(p + 1)}<br><span class="m">${esc(x.s)}</span></th>`).join('')}<th style="text-align:center">جمع</th></tr>`;
   let tot = 0;
   const body = rows.map((r: any) => {
     const d = r.data.days[di]; if (!d) return '';
-    const ex = d.cells.filter((x: any) => x.t).length; tot += ex;
+    const ex = d.cells.filter((x: any) => x.t).length; tot += nt ? (gxOf(d) ? 1 : 0) : ex;
+    if (nt) return `<tr style="cursor:default"><td>${esc(r.name)}${r.student_id === T.me.id ? ' <span class="tag">شما</span>' : ''}</td><td style="text-align:center">${gxOf(d) ? '<span class="tag xg" style="margin:0">گروه</span>' : '<span class="m">—</span>'}</td><td style="white-space:normal">${(r.data.f || []).map((x: string) => `<span class="tag xf">${esc(x)}</span>`).join('')}${(r.data.p || []).map((x: any) => `<span class="tag xp">${esc(x.s)}</span>`).join('')}</td></tr>`;
     return `<tr style="cursor:default"><td>${esc(r.name)}${r.student_id === T.me.id ? ' <span class="tag">شما</span>' : ''}</td>${d.cells.map((x: any) => `<td style="text-align:center">${x.t ? `<span class="tag x${x.t}" style="margin:0">${STN[x.t].replace('معاف ', '')}</span>` : '<span class="m">—</span>'}</td>`).join('')}<td style="text-align:center">${ex ? `<b>${n(ex)}</b>` : '<span class="m">—</span>'}</td></tr>`;
   }).join('');
   const last = weeks.length - 1, wi = Math.min(T.rw, last), D0 = rows[0].data;
   return `<div class="c" style="--gc:${c};margin-bottom:10px"><b>تقویم معافیت کلاس ${esc(T.me.cls)}</b><div class="m">نمایش وضعیت معافیت ${n(rows.length)} دانش‌آموز کلاس شما، فقط برای اطلاع نماینده.</div></div>
   <div class="tb"><button class="btn" ${wi >= last ? 'disabled' : ''} onclick="T.rw++;T.rd=0;draw()">◀</button><b>هفته‌ی ${jdate(D0.days[0].date)} تا ${jdate(D0.days[D0.days.length - 1].date)}</b><button class="btn" ${wi <= 0 ? 'disabled' : ''} onclick="T.rw--;T.rd=0;draw()">▶</button></div>
-  ${tabs}<p class="m">گروه ${d0.L} · ${n(tot)} ساعت معافیت در این روز</p>
+  ${tabs}<p class="m">گروه ${d0.L} · ${nt ? `${n(tot)} نفر معاف در این روز` : `${n(tot)} ساعت معافیت در این روز`}</p>
   <div class="c tw"><table><thead>${head}</thead><tbody>${body}</tbody></table></div>
   <p class="m" style="margin-top:10px"><span class="tag xg">گروه</span> <span class="tag xf">معلم</span> <span class="tag xp">پیشرفت</span></p>`;
 }
