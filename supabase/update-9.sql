@@ -1,8 +1,6 @@
--- ===== به‌روزرسانی ۹: حضور و غیاب (یک‌بار در SQL Editor اجرا کنید) =====
+-- ===== به‌روزرسانی ۹: حضور و غیاب (یک‌بار در SQL Editor اجرا کنید؛ اجرای دوباره هم بی‌خطر است) =====
 -- پیش‌نیاز: update-8.sql (نماینده‌ی کلاس) قبلاً اجرا شده باشد.
-
--- تنظیمات عمومی (مثلاً ساعت پایان مهلت ثبت دلیل غیبت)
-create table if not exists public.app_settings(key text primary key, value text not null);
+-- نماینده غیبت را ثبت می‌کند؛ فقط مدیر «شرح غیبت» می‌نویسد. از دانش‌آموز هیچ دلیلی گرفته نمی‌شود.
 
 -- غیبت و تأخیر؛ «حاضر» ردیف ندارد. هر ردیف = یک دانش‌آموز، یک روز، یک زنگ.
 create table if not exists public.attendance(
@@ -14,13 +12,10 @@ create table if not exists public.attendance(
   status text not null check (status in ('absent','late')),
   marked_by uuid references public.students on delete set null,
   marked_at timestamptz not null default now(),
-  deadline timestamptz not null default now(),   -- آخرین زمانی که دانش‌آموز می‌تواند دلیل بنویسد
-  reason text,                                   -- دلیل غیبت به قلم خود دانش‌آموز
-  reason_at timestamptz,
   unique(student_id, day, period));
 create index if not exists att_day_idx on public.attendance(day);
 
--- ثبت‌شدنِ حضور و غیابِ هر زنگ توسط نماینده (برای اینکه مدیر بداند زنگ «ثبت نشده» یا «همه حاضر بودند»)
+-- ثبت‌شدنِ حضور و غیابِ هر زنگ توسط نماینده (تا مدیر بداند زنگ «ثبت نشده» یا «همه حاضر بودند»)
 create table if not exists public.att_sessions(
   cls text not null, day date not null, period int not null,
   marked_by uuid references public.students on delete set null,
@@ -36,19 +31,13 @@ create table if not exists public.att_notes(
   updated_at timestamptz not null default now(),
   primary key(student_id, day));
 
-alter table public.app_settings enable row level security;
 alter table public.attendance enable row level security;
 alter table public.att_sessions enable row level security;
 alter table public.att_notes enable row level security;
-revoke all on public.app_settings, public.attendance, public.att_sessions, public.att_notes from anon;
-grant select, insert, update, delete on public.app_settings, public.attendance, public.att_sessions, public.att_notes to authenticated;
+revoke all on public.attendance, public.att_sessions, public.att_notes from anon;
+grant select, insert, update, delete on public.attendance, public.att_sessions, public.att_notes to authenticated;
 
-drop policy if exists st_read on public.app_settings;
-create policy st_read on public.app_settings for select to authenticated using (true);
-drop policy if exists st_mgr on public.app_settings;
-create policy st_mgr on public.app_settings for all to authenticated using (public.is_manager()) with check (public.is_manager());
-
--- دانش‌آموز فقط غیبت‌های خودش را می‌بیند و مستقیم چیزی نمی‌نویسد (فقط با تابع submit_absence_reason)
+-- دانش‌آموز فقط غیبت‌های خودش را می‌خواند (بدون هیچ نوشتن)؛ مدیر همه‌چیز
 drop policy if exists at_read on public.attendance;
 create policy at_read on public.attendance for select to authenticated using (student_id = public.my_student_id() or public.is_manager());
 drop policy if exists at_mgr on public.attendance;
@@ -58,26 +47,20 @@ create policy as_mgr on public.att_sessions for all to authenticated using (publ
 drop policy if exists an_mgr on public.att_notes;
 create policy an_mgr on public.att_notes for all to authenticated using (public.is_manager()) with check (public.is_manager());
 
--- تاریخ امروز به وقت تهران
+-- تنظیمات (فقط مدیر): فعلاً فقط «تاریخ آزمایشی» برای تست در روزهای تعطیل
+create table if not exists public.app_settings(key text primary key, value text not null);
+alter table public.app_settings enable row level security;
+revoke all on public.app_settings from anon;
+grant select, insert, update, delete on public.app_settings to authenticated;
+drop policy if exists st_mgr on public.app_settings;
+create policy st_mgr on public.app_settings for all to authenticated using (public.is_manager()) with check (public.is_manager());
+
+-- «امروز» برای حضور و غیاب: به وقت تهران، مگر اینکه حالت آزمایشی روشن باشد (فایل test-mode.sql)
 create or replace function public.att_today() returns date
-  language sql stable as $$ select (now() at time zone 'Asia/Tehran')::date $$;
-
--- ساعت پایان مهلت ثبت دلیل (پیش‌فرض ۱۰)
-create or replace function public.att_cutoff() returns int
   language sql stable security definer set search_path=public as $$
-  select coalesce((select value::int from public.app_settings where key='att_cutoff_hour'), 10) $$;
+  select coalesce((select value::date from public.app_settings where key = 'att_test_date'), (now() at time zone 'Asia/Tehran')::date) $$;
 
--- مهلتِ ثبت دلیل: تا ساعت مقرر همان روز؛ اگر غیبت بعد از آن ساعت ثبت شود، تا ساعت مقرر روز بعد
-create or replace function public.att_deadline(p_day date) returns timestamptz
-  language plpgsql stable security definer set search_path=public as $$
-declare cut int := public.att_cutoff(); d1 timestamptz;
-begin
-  d1 := (p_day::timestamp + make_interval(hours => cut)) at time zone 'Asia/Tehran';
-  if now() < d1 then return d1; end if;
-  return (p_day::timestamp + make_interval(days => 1, hours => cut)) at time zone 'Asia/Tehran';
-end $$;
-
--- وضعیت امروزِ کلاسِ نماینده (فقط وضعیت‌ها؛ دلیل‌ها را نماینده نمی‌بیند)
+-- وضعیت امروزِ کلاسِ نماینده (فقط وضعیت‌ها)
 create or replace function public.class_attendance() returns jsonb
   language plpgsql stable security definer set search_path=public as $$
 declare me record; t date := public.att_today();
@@ -92,11 +75,11 @@ begin
 end $$;
 
 -- ثبت حضور و غیابِ چند زنگِ امروز توسط نماینده.
--- p_periods: زنگ‌هایی که ثبت می‌شوند (۱ تا ...)؛ p_rows: [{student_id, period, status:'absent'|'late'}] (حاضرها ردیف ندارند)
+-- p_periods: زنگ‌هایی که ثبت می‌شوند؛ p_rows: [{student_id, period, status:'absent'|'late'}] (حاضرها ردیف ندارند)
 -- دانش‌آموزی که در آن زنگ معافیت دارد (طبق تقویم منتشرشده) هرگز غایب ثبت نمی‌شود.
 create or replace function public.save_attendance(p_periods int[], p_rows jsonb) returns jsonb
   language plpgsql security definer set search_path=public as $$
-declare me record; t date := public.att_today(); per int; r jsonb; sid uuid; st text; dl timestamptz; saved int := 0; skipped int := 0;
+declare me record; t date := public.att_today(); per int; r jsonb; sid uuid; st text; saved int := 0; skipped int := 0;
 begin
   select * into me from public.students where auth_id = auth.uid() and active and is_rep;
   if not found then raise exception 'فقط نماینده‌ی کلاس می‌تواند حضور و غیاب ثبت کند'; end if;
@@ -115,9 +98,8 @@ begin
                  where c.student_id = sid and d->>'date' = t::text and (d->'cells'->(per-1)->>'t') in ('g','f','p')) then
         skipped := skipped + 1; continue;
       end if;
-      dl := coalesce((select min(a.deadline) from public.attendance a where a.student_id = sid and a.day = t), public.att_deadline(t));
-      insert into public.attendance(student_id, cls, day, period, status, marked_by, deadline)
-        values (sid, me.cls, t, per, st, me.id, dl)
+      insert into public.attendance(student_id, cls, day, period, status, marked_by)
+        values (sid, me.cls, t, per, st, me.id)
         on conflict (student_id, day, period) do update set status = excluded.status, marked_by = excluded.marked_by, marked_at = now();
       saved := saved + 1;
     end loop;
@@ -127,24 +109,10 @@ begin
   return jsonb_build_object('saved', saved, 'skipped', skipped);
 end $$;
 
--- دانش‌آموز دلیل غیبتِ یک روز را (تا پایان مهلت) می‌نویسد
-create or replace function public.submit_absence_reason(p_day date, p_reason text) returns void
-  language plpgsql security definer set search_path=public as $$
-declare sid uuid := public.my_student_id(); dl timestamptz; txt text := btrim(coalesce(p_reason, ''));
-begin
-  if sid is null then raise exception 'حساب دانش‌آموز پیدا نشد'; end if;
-  if char_length(txt) < 3 then raise exception 'دلیل غیبت را کمی کامل‌تر بنویسید'; end if;
-  if char_length(txt) > 600 then raise exception 'متن بیش از حد طولانی است (حداکثر ۶۰۰ حرف)'; end if;
-  select min(deadline) into dl from public.attendance where student_id = sid and day = p_day;
-  if dl is null then raise exception 'برای این روز غیبتی ثبت نشده است'; end if;
-  if now() > dl then raise exception 'مهلت ثبت دلیل این غیبت تمام شده است'; end if;
-  update public.attendance set reason = txt, reason_at = now() where student_id = sid and day = p_day;
-end $$;
-
 -- مدیر: تغییر دستیِ وضعیت یک زنگ (present = حذف غیبت)
 create or replace function public.admin_set_attendance(p_student uuid, p_day date, p_period int, p_status text) returns void
   language plpgsql security definer set search_path=public as $$
-declare c text; dl timestamptz;
+declare c text;
 begin
   if not public.is_manager() then raise exception 'فقط مدیر'; end if;
   select cls into c from public.students where id = p_student;
@@ -152,14 +120,17 @@ begin
   if p_status = 'present' then
     delete from public.attendance where student_id = p_student and day = p_day and period = p_period;
   elsif p_status in ('absent','late') then
-    dl := coalesce((select min(deadline) from public.attendance where student_id = p_student and day = p_day), public.att_deadline(p_day));
-    insert into public.attendance(student_id, cls, day, period, status, marked_by, deadline)
-      values (p_student, c, p_day, p_period, p_status, null, dl)
+    insert into public.attendance(student_id, cls, day, period, status, marked_by)
+      values (p_student, c, p_day, p_period, p_status, null)
       on conflict (student_id, day, period) do update set status = excluded.status, marked_at = now();
   else raise exception 'وضعیت نامعتبر'; end if;
 end $$;
 
-revoke all on function public.att_today(), public.att_cutoff(), public.att_deadline(date), public.class_attendance(),
-  public.save_attendance(int[], jsonb), public.submit_absence_reason(date, text), public.admin_set_attendance(uuid, date, int, text) from public, anon;
-grant execute on function public.att_today(), public.att_cutoff(), public.att_deadline(date), public.class_attendance(),
-  public.save_attendance(int[], jsonb), public.submit_absence_reason(date, text), public.admin_set_attendance(uuid, date, int, text) to authenticated;
+revoke all on function public.att_today(), public.class_attendance(), public.save_attendance(int[], jsonb), public.admin_set_attendance(uuid, date, int, text) from public, anon;
+grant execute on function public.att_today(), public.class_attendance(), public.save_attendance(int[], jsonb), public.admin_set_attendance(uuid, date, int, text) to authenticated;
+
+-- ===== پاک‌سازی بخش «دلیل غیبت توسط دانش‌آموز» (اگر نسخه‌ی قبلی این فایل را اجرا کرده بودید) =====
+drop function if exists public.submit_absence_reason(date, text);
+drop function if exists public.att_deadline(date);
+drop function if exists public.att_cutoff();
+alter table public.attendance drop column if exists reason, drop column if exists reason_at, drop column if exists deadline;

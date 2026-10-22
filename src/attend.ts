@@ -4,7 +4,7 @@ import { sb } from './supa';
 
 export function mkAttend(A: any) {
   const esc = A.esc, n = A.n, D = () => A.D, U = A.U;
-  const AT: any = (U.AT = U.AT || { w: null, d: null, rows: [], sess: [], notes: [], hist: {}, cut: 10, loaded: '', at: 0, err: '', busy: false, stu: {}, warmed: false });
+  const AT: any = (U.AT = U.AT || { w: null, d: null, rows: [], sess: [], notes: [], hist: {}, loaded: '', at: 0, err: '', busy: false, stu: {}, warmed: false });
   const acc = () => D().srv?.accounts || {};
   const sidOf = (lid: string) => acc()[lid]?.sid;
   const lidOfSid = (sid: string) => Object.keys(acc()).find((l) => acc()[l].sid === sid);
@@ -16,7 +16,7 @@ export function mkAttend(A: any) {
   const chk = (id: string) => !!(document.getElementById(id) as HTMLInputElement | null)?.checked;
   const draw = () => A.draw();
   const tag = (t: string, bg?: string) => `<span class="tag" ${bg ? `style="background:${bg};color:#fff;border-color:${bg}"` : ''}>${t}</span>`;
-  const errMsg = (e: any) => (/attendance|att_|app_settings|function/i.test(e?.message || '') && /does not exist|find|schema|could not/i.test(e?.message || '') ? 'فایل supabase/update-9.sql هنوز روی سرور اجرا نشده است.' : e?.message || String(e));
+  const errMsg = (e: any) => (/attendance|att_|function/i.test(e?.message || '') && /does not exist|find|schema|could not/i.test(e?.message || '') ? 'فایل supabase/update-9.sql هنوز روی سرور اجرا نشده است.' : e?.message || String(e));
   const todayIso = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Tehran' });
 
   /* ---------- روز انتخاب‌شده ---------- */
@@ -35,13 +35,13 @@ export function mkAttend(A: any) {
     if (!force && AT.tried === day && Date.now() - AT.at < 20000) return;
     if (AT.busy) return; AT.busy = true; AT.err = ''; AT.tried = day; AT.at = Date.now();
     try {
-      const [a, s, nn, hh, cf] = await Promise.all([
+      const [a, s, nn, hh] = await Promise.all([
         sb.from('attendance').select('*').eq('day', day), sb.from('att_sessions').select('*').eq('day', day), sb.from('att_notes').select('*').eq('day', day),
-        sb.from('attendance').select('student_id,day').limit(20000), sb.from('app_settings').select('value').eq('key', 'att_cutoff_hour').maybeSingle()]);
+        sb.from('attendance').select('student_id,day').limit(20000)]);
       const bad = [a, s, nn].find((x: any) => x.error); if (bad) throw bad.error;
       AT.rows = a.data || []; AT.sess = s.data || []; AT.notes = nn.data || [];
       const m: any = {}; (hh.data || []).forEach((r: any) => { (m[r.student_id] = m[r.student_id] || new Set()).add(r.day); }); AT.hist = m;
-      AT.cut = cf.data?.value ? +cf.data.value : 10; AT.loaded = day;
+      AT.loaded = day;
     } catch (e: any) { AT.err = errMsg(e); }
     AT.busy = false; AT.at = Date.now(); draw();
   }
@@ -64,29 +64,23 @@ export function mkAttend(A: any) {
     const abs: any[] = [];
     classes.forEach((c: any) => c.ss.forEach((x: any) => { const mine = x.sid ? AT.rows.filter((r: any) => r.student_id === x.sid) : []; if (!mine.length) return;
       const note = AT.notes.find((q: any) => q.student_id === x.sid);
-      abs.push({ ...x, cl: c.cl, rows: mine, periods: mine.map((r: any) => r.period).sort((a: number, b: number) => a - b), full: mine.some((r: any) => r.status === 'absent'), reason: mine.find((r: any) => r.reason)?.reason || '', reasonAt: mine.find((r: any) => r.reason)?.reason_at, deadline: mine[0].deadline, note: note?.note || '', called: !!note?.called }); }));
-    const needs = (a: any) => !a.reason && !a.note && !a.called;
+      abs.push({ ...x, cl: c.cl, rows: mine, periods: mine.map((r: any) => r.period).sort((a: number, b: number) => a - b), full: mine.some((r: any) => r.status === 'absent'), note: note?.note || '', called: !!note?.called }); }));
+    const needs = (a: any) => !a.note && !a.called;
     abs.sort((x, y) => (needs(y) ? 1 : 0) - (needs(x) ? 1 : 0) || x.cl.localeCompare(y.cl, 'fa'));
     const exemptCount = classes.reduce((t: number, c: any) => t + c.ss.filter((x: any) => x.cells.some((q: any) => q.ex)).length, 0);
     const total = classes.length * per, done = classes.reduce((t: number, c: any) => t + c.sessions.filter(Boolean).length, 0);
     return { w, d, day, L, per, ok, classes, abs, needs, exemptCount, unmarked: total - done };
   }
-  const badge = () => { if (!A.SV.isMgr() || AT.loaded !== todayIso()) return 0; const m = AT.rows.reduce((s: any, r: any) => s.add(r.student_id), new Set()); let c = 0; m.forEach((sid: string) => { const nt = AT.notes.find((q: any) => q.student_id === sid), has = AT.rows.some((r: any) => r.student_id === sid && r.reason); if (!has && !nt?.note && !nt?.called) c++; }); return c; };
+  const badge = () => { if (!A.SV.isMgr() || AT.loaded !== todayIso()) return 0; const m = AT.rows.reduce((s: any, r: any) => s.add(r.student_id), new Set()); let c = 0; m.forEach((sid: string) => { const nt = AT.notes.find((q: any) => q.student_id === sid); if (!nt?.note && !nt?.called) c++; }); return c; };
 
   /* ---------- اجزای نمایش ---------- */
   const IC: any = { gx: '👥', fx: '🎓', px: '🚀' };
-  function reasonBlock(a: any) {
-    const dl = a.deadline ? new Date(a.deadline) : null, live = dl && dl.getTime() > Date.now();
-    if (a.reason) return `<div style="background:var(--card2);border-radius:10px;padding:8px 10px;margin:8px 0"><div class="m">🗣 دلیل به قلم خود دانش‌آموز${a.reasonAt ? ' · ' + hhmm(a.reasonAt) : ''}:</div><div>«${esc(a.reason)}»</div></div>`;
-    if (live) return `<div class="m" style="margin:8px 0">⏳ دانش‌آموز تا ساعت <b>${hhmm(a.deadline)}</b> مهلت دارد دلیل غیبتش را بنویسد.</div>`;
-    return `<div class="dn" style="margin:8px 0">⛔ مهلت تمام شد و دانش‌آموز دلیلی ننوشت. <b>باید با والدین تماس بگیرید.</b></div>`;
-  }
   function absCard(a: any, day: string) {
-    const s = a.s, ph = s.phone ? esc(s.phone) : '', prev = (AT.hist[a.sid]?.size || 1) - 1, need = !a.reason && !a.note && !a.called;
-    const col = a.called || a.note ? 'var(--ok)' : need ? '#ef4444' : '#f59e0b', k = `${a.sid}_${day}`;
+    const s = a.s, ph = s.phone ? esc(s.phone) : '', prev = (AT.hist[a.sid]?.size || 1) - 1, need = !a.note && !a.called;
+    const col = need ? '#ef4444' : 'var(--ok)', k = `${a.sid}_${day}`;
     return `<div class="c" style="border-inline-start:5px solid ${col};margin-top:10px">
       <div class="tb" style="margin-bottom:4px"><b style="font-size:16px">${esc(s.name)}</b>${tag(a.cl)}<span class="m">${a.rows.map((r: any) => `${r.status === 'late' ? '⏰' : '❌'} زنگ ${n(r.period)}`).join(' · ')}</span><span style="flex:1"></span>${prev > 0 ? `<span class="m">قبلاً ${n(prev)} روز غایب بوده</span>` : tag('اولین غیبت', '#10b981')}<button class="btn" onclick="AT_prof('${s.id}')">پرونده‌ی غیبت ←</button></div>
-      ${reasonBlock(a)}
+      ${need ? '<div class="dn" style="margin:8px 0">📞 هنوز با والدین تماس نگرفته‌اید و شرحی ننوشته‌اید.</div>' : ''}
       <div class="tb" style="margin:6px 0">${ph ? `<span dir="ltr" style="font-weight:700">📞 ${ph}</span><a class="btn p" href="tel:${ph}">تماس با والدین</a>` : `<input id="ph_${s.id}" dir="ltr" inputmode="tel" placeholder="تلفن والدین (۰۹…)" style="width:170px"><button class="btn" onclick="AT_phone('${s.id}')">ذخیره‌ی شماره</button>`}</div>
       <textarea id="nt_${k}" placeholder="شرح غیبت (مثلاً: با مادرشان تماس گرفتم؛ بیمار بوده…)" style="width:100%;min-height:62px">${esc(a.note)}</textarea>
       <div class="tb" style="margin:6px 0 0"><label class="m"><input type="checkbox" id="cl_${k}" ${a.called ? 'checked' : ''}> با والدین تماس گرفتم</label><span style="flex:1"></span><button class="btn p" onclick="AT_note('${a.sid}','${day}')">ذخیره‌ی شرح</button></div></div>`;
@@ -127,7 +121,7 @@ export function mkAttend(A: any) {
     <h3 class="xh">🚨 غایبین و تماس با والدین ${M.abs.length ? `<span class="m">(${n(M.abs.length)} نفر)</span>` : ''}</h3>${absHtml}
     <h3 class="xh" style="margin-top:18px">🏫 وضعیت کلاس‌ها در همه‌ی زنگ‌ها</h3><p class="m" style="margin:0">✓ حاضر · ❌ غایب · ⏰ تأخیر · 👥🎓🚀 معافیت (گروه/معلم/پیشرفت) · روی هر خانه بزنید تا وضعیتش را تغییر دهید.</p>${cls}
     ${noAcc ? `<p class="m" style="margin-top:10px">⚠ ${n(noAcc)} دانش‌آموز هنوز حساب پنل ندارند؛ غیبت‌شان را نماینده نمی‌تواند ثبت کند.</p>` : ''}
-    <div class="c" style="margin-top:14px"><div class="tb" style="margin:0"><b>⚙ مهلت ثبت دلیل غیبت توسط دانش‌آموز: تا ساعت</b><input id="at_cut" type="number" min="1" max="23" value="${AT.cut}" style="width:70px"><button class="btn" onclick="AT_cut()">ذخیره</button><span style="flex:1"></span><button class="btn" onclick="AT_csv()">⬇ خروجی CSV غیبت‌های این روز</button></div><p class="m" style="margin:6px 0 0">اگر غیبت قبل از این ساعت ثبت شود، تا همان روز مهلت دارد؛ اگر بعدتر ثبت شود، تا همین ساعتِ روز بعد.</p></div>`;
+    <div class="tb" style="margin-top:14px"><button class="btn" onclick="AT_csv()">⬇ خروجی CSV غیبت‌های این روز</button></div>`;
   }
 
   /* ---------- تب غیبت‌ها در پروفایل ---------- */
@@ -142,7 +136,7 @@ export function mkAttend(A: any) {
     const c = AT.stu[sid]; if (!c?.rows) return [];
     const m: any = {}; c.rows.forEach((r: any) => { (m[r.day] = m[r.day] || []).push(r); });
     return Object.keys(m).sort().reverse().map((day) => { const rs = m[day].sort((a: any, b: any) => a.period - b.period), nt = c.notes.find((q: any) => q.day === day);
-      return { day, rs, reason: rs.find((r: any) => r.reason)?.reason || '', reasonAt: rs.find((r: any) => r.reason)?.reason_at, deadline: rs[0].deadline, note: nt?.note || '', called: !!nt?.called, hasAbs: rs.some((r: any) => r.status === 'absent') }; });
+      return { day, rs, note: nt?.note || '', called: !!nt?.called, hasAbs: rs.some((r: any) => r.status === 'absent') }; });
   }
   function kpi(s: any) {
     const sid = sidOf(s.id); if (!A.SV.isMgr() || !sid) return '';
@@ -157,17 +151,16 @@ export function mkAttend(A: any) {
     loadStu(sid); const c = AT.stu[sid];
     if (!c?.rows) return `<div class="c m" style="text-align:center">${c?.err ? esc(c.err) : '⏳ در حال دریافت…'}</div>`;
     if (c.err) return `<div class="c dn">${esc(c.err)}</div>`;
-    const G = groups(sid), absDays = G.filter((x: any) => x.hasAbs), absP = c.rows.filter((r: any) => r.status === 'absent').length, late = c.rows.filter((r: any) => r.status === 'late').length, noReason = absDays.filter((x: any) => !x.reason).length;
+    const G = groups(sid), absDays = G.filter((x: any) => x.hasAbs), absP = c.rows.filter((r: any) => r.status === 'absent').length, late = c.rows.filter((r: any) => r.status === 'late').length, noReason = absDays.filter((x: any) => !x.note && !x.called).length;
     const months: any = {}; absDays.forEach((x: any) => { const k = new Date(x.day + 'T12:00:00').toLocaleDateString('fa-IR', { month: 'long' }); months[k] = (months[k] || 0) + 1; });
     const kp = (b: any, t: string, cls = '') => `<div class="c k"><b class="${cls}">${n(b)}</b><span>${t}</span></div>`;
     const ph = s.phone ? esc(s.phone) : '';
     const top = `<div class="c"><div class="tb" style="margin:0"><b>📞 تلفن والدین:</b>${ph ? `<span dir="ltr" style="font-weight:700">${ph}</span><a class="btn p" href="tel:${ph}">تماس</a>` : ''}<input id="ph_${s.id}" dir="ltr" inputmode="tel" placeholder="${ph ? 'تغییر شماره' : '۰۹…'}" style="width:160px" value=""><button class="btn" onclick="AT_phone('${s.id}')">ذخیره</button></div></div>`;
-    const cards = G.map((x: any) => { const k = `${sid}_${x.day}`, live = new Date(x.deadline).getTime() > Date.now();
-      return `<div class="c" style="margin-top:8px;border-inline-start:5px solid ${x.hasAbs ? (x.reason || x.note ? '#f59e0b' : '#ef4444') : '#f59e0b'}"><div class="tb" style="margin:0 0 4px"><b>${fa(x.day)}</b><span class="m">${x.rs.map((r: any) => `${r.status === 'late' ? '⏰' : '❌'} زنگ ${n(r.period)}`).join(' · ')}</span><span style="flex:1"></span>${x.called ? tag('📞 تماس گرفته شد', '#10b981') : ''}</div>
-      ${x.reason ? `<div style="background:var(--card2);border-radius:10px;padding:8px 10px;margin:6px 0"><div class="m">🗣 دلیل به قلم دانش‌آموز${x.reasonAt ? ' · ' + hhmm(x.reasonAt) : ''}:</div>«${esc(x.reason)}»</div>` : live ? `<div class="m">⏳ مهلت دانش‌آموز تا ${hhmm(x.deadline)}</div>` : `<div class="dn">⛔ دلیلی ثبت نشد</div>`}
+    const cards = G.map((x: any) => { const k = `${sid}_${x.day}`;
+      return `<div class="c" style="margin-top:8px;border-inline-start:5px solid ${x.note || x.called ? 'var(--ok)' : x.hasAbs ? '#ef4444' : '#f59e0b'}"><div class="tb" style="margin:0 0 4px"><b>${fa(x.day)}</b><span class="m">${x.rs.map((r: any) => `${r.status === 'late' ? '⏰' : '❌'} زنگ ${n(r.period)}`).join(' · ')}</span><span style="flex:1"></span>${x.called ? tag('📞 تماس گرفته شد', '#10b981') : ''}</div>
       <textarea id="nt_${k}" placeholder="شرح مدیر (نتیجه‌ی تماس با والدین…)" style="width:100%;min-height:56px">${esc(x.note)}</textarea>
       <div class="tb" style="margin:6px 0 0"><label class="m"><input type="checkbox" id="cl_${k}" ${x.called ? 'checked' : ''}> با والدین تماس گرفتم</label><span style="flex:1"></span><button class="btn p" onclick="AT_note('${sid}','${x.day}')">ذخیره</button></div></div>`; }).join('') || '<div class="c m" style="text-align:center">🎉 تا حالا غیبتی نداشته.</div>';
-    return `<div class="g" style="margin:0 0 10px">${kp(absDays.length, 'روز غیبت', absDays.length ? 'dn' : '')}${kp(absP, 'زنگ غیبت')}${kp(late, 'تأخیر')}${kp(noReason, 'بدون دلیل', noReason ? 'dn' : '')}</div>${top}
+    return `<div class="g" style="margin:0 0 10px">${kp(absDays.length, 'روز غیبت', absDays.length ? 'dn' : '')}${kp(absP, 'زنگ غیبت')}${kp(late, 'تأخیر')}${kp(noReason, 'بدون شرح', noReason ? 'dn' : '')}</div>${top}
     ${Object.keys(months).length ? `<div class="c" style="margin-top:10px"><h3>غیبت به تفکیک ماه</h3>${A.bars(Object.entries(months).map(([l, v]: any) => ({ l, v })))}</div>` : ''}${cards}`;
   }
 
@@ -201,15 +194,14 @@ export function mkAttend(A: any) {
     await load(true);
   }
   function csv() {
-    const M = model(), rows = M.abs.map((a: any) => [a.s.name, a.cl, a.periods.join('،'), a.reason, a.note, a.called ? 'بله' : 'خیر', a.s.phone || '']);
-    A.dlf(`غیبت-${M.day}.csv`, [['نام', 'کلاس', 'زنگ‌ها', 'دلیل دانش‌آموز', 'شرح مدیر', 'تماس گرفته شد', 'تلفن والدین'], ...rows]);
+    const M = model(), rows = M.abs.map((a: any) => [a.s.name, a.cl, a.periods.join('،'), a.note, a.called ? 'بله' : 'خیر', a.s.phone || '']);
+    A.dlf(`غیبت-${M.day}.csv`, [['نام', 'کلاس', 'زنگ‌ها', 'شرح مدیر', 'تماس گرفته شد', 'تلفن والدین'], ...rows]);
   }
   const h = {
     AT_step: step, AT_ref: () => load(true), AT_today: () => { AT.w = null; initDay(); load(true); },
     AT_cell: cellModal, AT_set: setCell, AT_all: allDay, AT_note: saveNote, AT_csv: csv,
     AT_prof: (lid: string) => { A.op(lid); U.stab = 'abs'; draw(); },
     AT_phone: (lid: string) => { const v = val('ph_' + lid).replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[^\d+]/g, ''); if (v.length < 8) { A.toast('شماره معتبر نیست'); return; } A.sf(lid, 'phone', v); A.toast('شماره ذخیره شد ✓'); },
-    AT_cut: async () => { const v = Math.round(+val('at_cut')); if (!(v >= 1 && v <= 23)) { A.toast('ساعت بین ۱ تا ۲۳'); return; } const { error } = await sb.from('app_settings').upsert({ key: 'att_cutoff_hour', value: String(v) }, { onConflict: 'key' }); if (error) { A.toast('خطا: ' + errMsg(error)); return; } AT.cut = v; A.toast('ذخیره شد ✓ (برای غیبت‌های جدید اعمال می‌شود)'); },
-  };
+      };
   return { page, h, badge, warm, kpi, stuTab, lidOfSid };
 }
