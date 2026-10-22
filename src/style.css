@@ -210,3 +210,41 @@ details.c>summary::-webkit-details-marker{display:none}
 .dycall{display:inline-flex;gap:8px;align-items:center;text-decoration:none}
 .dytog{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:999px;background:var(--card2);border:1px solid var(--bd);font-weight:700;cursor:pointer}
 .dytog:has(input:checked){background:#16a34a22;border-color:#16a34a;color:#16a34a}
+
+/* ===== بخش معافیت‌ها (بازطراحی) ===== */
+.exhero{display:flex;align-items:center;gap:14px;padding:18px;border-radius:24px;background:linear-gradient(135deg,#7c3aed,#4f46e5 55%,#0e7490);color:#fff;margin-bottom:12px;box-shadow:0 14px 30px -14px #6d28d9}
+.exhero h2{margin:2px 0;color:#fff;font-size:22px}.exhero small{opacity:.9}
+.exwn{display:flex;gap:6px}.exwn button{border:0;border-radius:12px;background:#ffffff26;color:#fff;padding:9px 14px;cursor:pointer;font-weight:800;font-size:14px}.exwn button:hover{background:#ffffff40}
+.exday{display:flex;align-items:center;gap:12px;padding:14px;border-radius:20px;background:color-mix(in srgb,var(--gc) 12%,var(--card));border:1px solid color-mix(in srgb,var(--gc) 45%,var(--bd));border-inline-start:6px solid var(--gc);margin-bottom:12px}
+.exg{flex:none;width:46px;height:46px;border-radius:15px;display:grid;place-items:center;font-size:21px;font-weight:900;color:#fff;background:var(--gc);box-shadow:0 8px 16px -8px var(--gc)}
+.exnames{display:flex;gap:2px;flex-wrap:wrap;margin-top:6px}
+.extl{display:flex;flex-direction:column;gap:8px}
+.exp{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:18px;background:var(--card);border:1px solid var(--bd);border-inline-start:6px solid var(--ec);cursor:pointer;transition:.15s}
+.exp:hover{transform:translateY(-2px);box-shadow:0 12px 22px -14px #0008}
+.exp.x{background:color-mix(in srgb,var(--ec) 10%,var(--card))}
+.exp .no{flex:none;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-weight:800;background:var(--card2);color:var(--mut)}
+.exp b{font-size:15px}
+.exl{margin-top:4px;font-size:12.5px;padding:3px 10px;border-radius:10px;display:inline-block;margin-inline-end:6px}
+.exl.f{background:#f59e0b1f;color:#b45309}.exl.p{background:#ec48991f;color:#be185d}
+.exsec{margin-top:10px;border-top:4px solid var(--sc)}
+.exgc{background:var(--card);border:1px solid var(--bd);border-radius:20px;overflow:hidden}
+.exgh{display:flex;align-items:center;gap:10px;padding:12px 14px;background:linear-gradient(135deg,var(--gc),color-mix(in srgb,var(--gc) 65%,#000));color:#fff}
+.exgh i{font-style:normal;width:30px;height:30px;border-radius:10px;background:#ffffff33;display:grid;place-items:center;font-weight:900}
+.exgh span{margin-inline-start:auto;opacity:.92;font-size:13px}
+.exm{display:flex;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid var(--bd)}
+.exm:last-child{border-bottom:0}.exm select{max-width:110px;font-size:12px}
+.av{flex:none;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:13px;background:var(--acs);color:var(--ac)}
+.exbar{display:flex;height:30px;border-radius:12px;overflow:hidden;margin-top:10px;gap:2px}
+.exbar span{display:grid;place-items:center;color:#fff;font-size:12px;font-weight:800;min-width:34px}
+.exopt{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:14px;background:var(--card2);border:1px solid var(--bd);cursor:pointer}
+.xttg{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin-top:10px}
+.xttd{border-top:5px solid var(--gc);padding:12px}
+.xtth{margin-bottom:8px;font-size:15px}
+.xttr{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.xttr .no{flex:none;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:800;background:var(--card2);color:var(--mut)}
+.xttr input{flex:1;min-width:0}
+.exsg{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:10px;margin-top:10px}
+.exstu{padding:14px;border-radius:20px;background:var(--card);border:1px solid var(--bd);border-top:4px solid var(--bd)}
+.exstu.has{border-top-color:#ec4899;background:color-mix(in srgb,#ec4899 5%,var(--card))}
+.chk label{padding:7px 10px;border:1px solid var(--bd);border-radius:12px;background:var(--card);cursor:pointer;transition:.12s}
+.chk label:has(input:checked){background:var(--acs);border-color:var(--ac);color:var(--ac);font-weight:700}
