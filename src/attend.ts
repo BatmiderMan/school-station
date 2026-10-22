@@ -53,7 +53,7 @@ export function mkAttend(A: any) {
 
   /* ---------- مدل روز ---------- */
   function model() {
-    const w = AT.w, d = AT.d, day = iso(w, d), L = A.letter(d, w), per = A.D.ex.per, ok = AT.loaded === iso(w, 0);
+    const w = AT.w, d = AT.d, day = iso(w, d), Ls = [...new Set<string>(A.CL.map((c: string) => A.letterC(c, d, w)))], L = Ls.join('·'), per = A.D.ex.per, ok = AT.loaded === iso(w, 0);
     const R = AT.rows.filter((r: any) => r.day === day), S = AT.sess.filter((x: any) => x.day === day), N = AT.notes.filter((x: any) => x.day === day);
     const classes = A.CL.map((cl: string) => {
       const ss = D().students.filter((s: any) => s.cls === cl).sort(A.byNum).map((s: any) => {
@@ -74,8 +74,8 @@ export function mkAttend(A: any) {
     const exemptCount = classes.reduce((t: number, c: any) => t + c.ss.filter((x: any) => x.cells.some((q: any) => q.ex)).length, 0);
     const total = classes.length * per, done = classes.reduce((t: number, c: any) => t + c.sessions.filter(Boolean).length, 0);
     const absSt = new Set(R.filter((r: any) => r.status === 'absent').map((r: any) => r.student_id)), lateSt = new Set(R.filter((r: any) => r.status === 'late' && !absSt.has(r.student_id)).map((r: any) => r.student_id));
-    const strip = [0, 1, 2, 3].map((dd) => { const dy = iso(w, dd), ab = new Set(AT.rows.filter((r: any) => r.day === dy && r.status === 'absent').map((r: any) => r.student_id)).size, sc = AT.sess.filter((x: any) => x.day === dy).length; return { d: dd, day: dy, ab, sc, L: A.letter(dd, w) }; });
-    return { w, d, day, L, per, ok, classes, abs, needs, exemptCount, done, total, unmarked: total - done, absN: absSt.size, lateN: lateSt.size, strip };
+    const strip = [0, 1, 2, 3].map((dd) => { const dy = iso(w, dd), ab = new Set(AT.rows.filter((r: any) => r.day === dy && r.status === 'absent').map((r: any) => r.student_id)).size, sc = AT.sess.filter((x: any) => x.day === dy).length; const Lz = [...new Set<string>(A.CL.map((c: string) => A.letterC(c, dd, w)))]; return { d: dd, day: dy, ab, sc, L: Lz.join('·'), L0: Lz[0] }; });
+    return { w, d, day, L, L0: Ls[0], per, ok, classes, abs, needs, exemptCount, done, total, unmarked: total - done, absN: absSt.size, lateN: lateSt.size, strip };
   }
   const badge = () => { if (!A.SV.isMgr() || !AT.days?.includes(todayIso())) return 0; const t = todayIso(), sids = new Set<string>(AT.rows.filter((r: any) => r.day === t).map((r: any) => r.student_id)); let c = 0; sids.forEach((sid: string) => { const nt = AT.notes.find((q: any) => q.student_id === sid && q.day === t); if (!nt?.note && !nt?.called) c++; }); return c; };
 
@@ -93,7 +93,7 @@ export function mkAttend(A: any) {
   }
   function weekStrip(M: any) {
     const t = todayIso();
-    const days = M.strip.map((x: any) => `<button class="dyd ${x.d === M.d ? 'on' : ''} ${x.day === t ? 'td' : ''}" onclick="AT_go(${M.w},${x.d})"><small>${A.DAYN[x.d]}</small><b>${dnum(x.day)}</b><span>${mon(x.day)}</span><i style="background:${gcol(x.L)}">${x.L}</i>${x.ab ? `<em>${n(x.ab)}</em>` : x.sc ? '<u>✓</u>' : ''}</button>`).join('');
+    const days = M.strip.map((x: any) => `<button class="dyd ${x.d === M.d ? 'on' : ''} ${x.day === t ? 'td' : ''}" onclick="AT_go(${M.w},${x.d})"><small>${A.DAYN[x.d]}</small><b>${dnum(x.day)}</b><span>${mon(x.day)}</span><i style="background:${gcol(x.L0)}">${x.L}</i>${x.ab ? `<em>${n(x.ab)}</em>` : x.sc ? '<u>✓</u>' : ''}</button>`).join('');
     return `<div class="dywk"><button class="btn" onclick="AT_wk(-1)">▶</button><div class="dyds">${days}</div><button class="btn" onclick="AT_wk(1)">◀</button></div>`;
   }
   function heat(M: any) {
@@ -143,8 +143,8 @@ export function mkAttend(A: any) {
       const g = c.ss.filter((x: any) => x.cells.every((q: any) => q.ex === 'g') && x.cells.length), rest = c.ss.filter((x: any) => !g.includes(x) && x.cells.some((q: any) => q.ex));
       const line = (x: any) => { const by: any = {}; x.cells.forEach((q: any, i: number) => { if (q.ex) (by[q.ex] = by[q.ex] || []).push(i + 1); });
         return `<span class="tag" style="margin:3px">${esc(x.s.name)} ${Object.keys(by).map((k) => `${EXI[k]} ${EXN[k]}${by[k].length === x.cells.length ? '' : ' (زنگ ' + by[k].map(n).join('،') + ')'}`).join(' + ')}</span>`; };
-      return `<div class="c" style="margin-bottom:10px"><div class="tb" style="margin:0 0 6px"><b style="font-size:16px">${c.cl}</b>${tag('گروه ' + M.L, gcol(M.L))}<span class="m">${n(g.length + rest.length)} نفر دارای معافیت</span></div>
-        ${g.length ? `<div style="margin:6px 0"><b>👥 معاف کل روز (گروه ${M.L})</b><div>${g.map((x: any) => `<span class="tag" style="margin:3px">${esc(x.s.name)}</span>`).join('')}</div></div>` : ''}
+      return `<div class="c" style="margin-bottom:10px"><div class="tb" style="margin:0 0 6px"><b style="font-size:16px">${c.cl}</b>${tag('گروه ' + A.letterC(c.cl, M.d, M.w), gcol(A.letterC(c.cl, M.d, M.w)))}<span class="m">${n(g.length + rest.length)} نفر دارای معافیت</span></div>
+        ${g.length ? `<div style="margin:6px 0"><b>👥 معاف کل روز (گروه ${A.letterC(c.cl, M.d, M.w)})</b><div>${g.map((x: any) => `<span class="tag" style="margin:3px">${esc(x.s.name)}</span>`).join('')}</div></div>` : ''}
         ${rest.length ? `<div style="margin:6px 0"><b>🎓🚀 معافیت‌های دیگر</b><div>${rest.map(line).join('')}</div></div>` : ''}
         ${!g.length && !rest.length ? '<p class="m" style="margin:0">امروز در این کلاس معافیتی نیست.</p>' : ''}</div>`; }).join('');
   }

@@ -100,12 +100,12 @@ function stu(){const S=stuRows(),wl=S.filter(s=>s.l!=null),dr=S.filter(s=>s.d!=n
  <div class="c tw" id="tl">${stbl(S)}</div>
  <div class="c" style="margin-top:10px"><h3>افزودن دانش‌آموز</h3><div class="tb"><select id="ac">${CL.map(c=>`<option ${c===U.cls?'selected':''}>${c}</option>`).join('')}</select><span class="m">هر خط یک نفر: شماره، نام، فامیل، کد ملی (۱۰ رقم). مثال: «۱۲ علی احمدی ۰۰۱۲۳۴۵۶۷۸». شماره‌ی تلفن والدین (۰۹…) را اگر خواستید می‌توانید آخر خط اضافه کنید؛ اجباری نیست.</span></div><textarea id="an" placeholder="۱ علی احمدی ۰۰۱۲۳۴۵۶۷۸&#10;۲ رضا کریمی ۰۰۹۸۷۶۵۴۳۲"></textarea><button class="btn p" onclick="addS()">افزودن</button></div>`}
 const stbl=S=>{const dup:any={};S.forEach(s=>{const k=s.cls+'|'+s.num;dup[k]=(dup[k]||0)+1});const th=(k:string,t:string)=>`<th style="cursor:pointer" onclick="U.sort='${k}';draw()">${t}${U.sort===k?' ▾':''}</th>`;
- return `<table><thead><tr>${th('num','شماره')}${th('n','نام')}<th>کلاس</th><th>گروه</th>${th('l','تراز ماز')}<th>رتبه ماز</th><th>تراز قلم‌چی</th><th>رتبه قلم‌چی</th><th>روند ${U.ins}</th></tr></thead><tbody>${S.map(s=>{const a=lr(s.id,'ماز'),b=lr(s.id,'قلم‌چی'),g=ensureEx().g[s.id];return `<tr onclick="op('${s.id}')"><td onclick="event.stopPropagation()"><input type="number" min="1" value="${s.num??''}" style="width:58px;${dup[s.cls+'|'+s.num]>1?'border-color:var(--bad)':''}" onchange="setNum('${s.id}',this.value)"></td><td>${esc(s.name)}</td><td>${s.cls}</td><td>${g?`<span class="tag" style="background:${GC[GL.indexOf(g)]};color:#fff">${g}</span>`:'—'}</td><td>${n(a.l)} ${dl(a.d)}</td><td>${n(a.rk)}</td><td>${n(b.l)} ${dl(b.d)}</td><td>${n(b.rk)}</td><td>${spark(sers(s.id))}</td></tr>`}).join('')}</tbody></table>`};
+ return `<table><thead><tr>${th('num','شماره')}${th('n','نام')}<th>کلاس</th><th>گروه</th>${th('l','تراز ماز')}<th>رتبه ماز</th><th>تراز قلم‌چی</th><th>رتبه قلم‌چی</th><th>روند ${U.ins}</th></tr></thead><tbody>${S.map(s=>{const a=lr(s.id,'ماز'),b=lr(s.id,'قلم‌چی'),g=ensureEx().g[s.id],g2=isDual(s.cls)?ensureEx().g2[s.id]:'';return `<tr onclick="op('${s.id}')"><td onclick="event.stopPropagation()"><input type="number" min="1" value="${s.num??''}" style="width:58px;${dup[s.cls+'|'+s.num]>1?'border-color:var(--bad)':''}" onchange="setNum('${s.id}',this.value)"></td><td>${esc(s.name)}</td><td>${s.cls}</td><td>${g?`<span class="tag" style="background:${GC[GL.indexOf(g)]};color:#fff">${g}</span>`:'—'}${g2?`<span class="tag" style="background:${GC[GL.indexOf(g2)]};color:#fff" title="گروه‌بندی دوتایی">${g2}²</span>`:''}</td><td>${n(a.l)} ${dl(a.d)}</td><td>${n(a.rk)}</td><td>${n(b.l)} ${dl(b.d)}</td><td>${n(b.rk)}</td><td>${spark(sers(s.id))}</td></tr>`}).join('')}</tbody></table>`};
 function sr(){$('#tl').innerHTML=stbl(stuRows())}
 const setNum=(id:string,v:string)=>{D.students.find(x=>x.id===id).num=+v||undefined;save();draw()};
 function renum(mode:string){if(U.cls==='all'){alert('اول یک کلاس را از بالا انتخاب کنید.');return}if(!confirm('کلاس '+U.cls+' از ۱ شماره‌گذاری مجدد شود؟'))return;const ss=D.students.filter(x=>x.cls===U.cls);if(mode==='a')ss.sort((a,b)=>a.name.localeCompare(b.name,'fa'));ss.forEach((x,i)=>x.num=i+1);save();draw()}
 const nidClean=(v:string)=>String(v).replace(/[۰-۹]/g,d=>String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g,d=>String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/\D/g,'');
-const sf=(id:string,k:string,v:string)=>{const x=D.students.find(z=>z.id===id);if(k==='num')x.num=+v||undefined;else if(k==='cls'){x.cls=v;delete ensureEx().g[id];x.num=undefined;ensureNums()}else if(k==='nid')x.nid=nidClean(v);else x[k]=v.trim();save();draw()};
+const sf=(id:string,k:string,v:string)=>{const x=D.students.find(z=>z.id===id);if(k==='num')x.num=+v||undefined;else if(k==='cls'){x.cls=v;delete ensureEx().g[id];delete ensureEx().g2[id];x.num=undefined;ensureNums()}else if(k==='nid')x.nid=nidClean(v);else x[k]=v.trim();save();draw()};
 function addS(){const c=$('#ac').value;let mx=Math.max(0,...D.students.filter(x=>x.cls===c).map(x=>x.num||0)),noId=0,bad=0;
  $('#an').value.split('\n').map(x=>x.trim()).filter(Boolean).forEach(raw=>{let line=nidClean0(raw),nid='',phone='';const pm=line.match(/(?:^|\s)(09\d{9})(?=\s|$)/);if(pm){phone=pm[1];line=line.replace(pm[1],' ').replace(/\s+/g,' ').trim()}const t=line.match(/^(.*\S)\s+(\d{10})$/);if(t){line=t[1];nid=t[2]}
   const m=line.match(/^(\d+)\s*[-.،,:)\t ]\s*(.+)$/);const num=m?+m[1]:++mx;if(num>mx)mx=num;const name=m?m[2].trim():line;if(!nid){noId++;if(/\d{6,}/.test(name))bad++}
@@ -121,7 +121,7 @@ function exCard(e:any,s:any){const r=e.res[s.id],mates=D.students.filter(x=>x.cl
 function spage(){const s=D.students.find(x=>x.id===U.sid);if(!s){U.p='stu';return stu()}
  const id=s.id,E=ensureEx(),g=E.g[id],mates=D.students.filter(x=>x.cls===s.cls).sort(byNum),ix=mates.findIndex(x=>x.id===id),mine=exs().filter(e=>e.res[id]),sch=sexams().filter(e=>e.cls===s.cls&&e.sc[id]);
  const kp=(ins:string)=>{const a=lr(id,ins);return `<div class="c k"><span>تراز ${ins}</span><b>${n(a.l)}</b><span>${a.d!=null?dl(a.d)+' · ':''}رتبه ${n(a.rk)}</span></div>`};
- const hero=`<div class="c hero"><div class="av">${n(s.num)}</div><div style="flex:1;min-width:150px"><h2 style="margin:0">${esc(s.name)}</h2><div class="m">${s.cls} · شماره ${n(s.num)}${s.nid?` · کد ملی <span dir="ltr">${esc(s.nid)}</span>`:''}${s.phone?` · 📞 والدین <a href="tel:${esc(s.phone)}" dir="ltr">${esc(s.phone)}</a>`:''}</div><div>${g?`<span class="tag" style="background:${GC[GL.indexOf(g)]};color:#fff">گروه ${g}</span>`:'<span class="tag">بدون گروه</span>'}<span class="tag">${n(mine.length)} آزمون</span></div></div><div class="tb"><button class="btn" ${ix>0?'':'disabled'} onclick="stuNav(-1)">▶ قبلی</button><button class="btn" ${ix<mates.length-1?'':'disabled'} onclick="stuNav(1)">بعدی ◀</button><button class="btn p" onclick="U.p=U.back||'stu';draw()">↩ بازگشت</button></div></div>`;
+ const hero=`<div class="c hero"><div class="av">${n(s.num)}</div><div style="flex:1;min-width:150px"><h2 style="margin:0">${esc(s.name)}</h2><div class="m">${s.cls} · شماره ${n(s.num)}${s.nid?` · کد ملی <span dir="ltr">${esc(s.nid)}</span>`:''}${s.phone?` · 📞 والدین <a href="tel:${esc(s.phone)}" dir="ltr">${esc(s.phone)}</a>`:''}</div><div>${g?`<span class="tag" style="background:${GC[GL.indexOf(g)]};color:#fff">گروه ${g}</span>`:'<span class="tag">بدون گروه</span>'}${isDual(s.cls)&&E.g2[id]?`<span class="tag" style="background:${GC[GL.indexOf(E.g2[id])]};color:#fff">دوتایی: ${E.g2[id]}</span>`:''}<span class="tag">${n(mine.length)} آزمون</span></div></div><div class="tb"><button class="btn" ${ix>0?'':'disabled'} onclick="stuNav(-1)">▶ قبلی</button><button class="btn" ${ix<mates.length-1?'':'disabled'} onclick="stuNav(1)">بعدی ◀</button><button class="btn p" onclick="U.p=U.back||'stu';draw()">↩ بازگشت</button></div></div>`;
  const kpis=`<div class="g" style="margin:10px 0">${kp('ماز')}${kp('قلم‌چی')}<div class="c k"><b>${n(sch.length)}</b><span>آزمون مدرسه</span></div><div class="c k" style="cursor:pointer" onclick="xstu('${id}')"><b>📝</b><span>همه‌ی نتایج آزمون‌های او ←</span></div>${AT2.kpi(s)}</div>`;
  const tab=U.stab||'ov';let body='';
  if(tab==='ov'){
@@ -136,8 +136,8 @@ function spage(){const s=D.students.find(x=>x.id===U.sid);if(!s){U.p='stu';retur
   body=[...sch].reverse().map(e=>{const mm=D.students.filter(x=>x.cls===e.cls);return `<div class="c" style="margin-bottom:10px"><h3>${esc(e.title)} <span class="m">${esc(e.date)}</span></h3>${bars(e.lessons.filter(l=>e.sc[id][l.name]!=null).map(l=>({l:`${l.name} (از ${n(l.max)}) · میانگین کلاس ${n1(avg(mm.map(x=>e.sc[x.id]?.[l.name])))}`,v:e.sc[id][l.name]})),n1)}</div>`}).join('')||'<div class="c m">برای این دانش‌آموز نمره‌ی آزمون مدرسه ثبت نشده است.</div>'}
  else if(tab==='ex'){
   const w=U.w,cl=s.cls,pw=(E.pw[w]||{})[id],subs=[...new Set(tt(cl).flat().filter(Boolean))] as string[];let cnt=0;
-  let gr=`<div class="cal"><div></div>${[0,1,2,3].map(d=>{const L=letter(d,w);return `<div class="ch" style="--gc:${GC[GL.indexOf(L)]}"><b>${DAYN[d]}</b><span>${jd(dateOf(w,d))}</span><i>${L}</i></div>`}).join('')}`;
-  for(let p=0;p<E.per;p++){gr+=`<div class="cp">${n(p+1)}</div>`;for(let d=0;d<4;d++){const st=status(id,cl,w,d,p);if(st)cnt++;gr+=`<div class="cell ${st?'x'+st:''}" style="--gc:${GC[GL.indexOf(letter(d,w))]}"><b>${esc(subj(cl,d,p))}</b><em>${st?({g:'معافیت گروه',f:'معافیت معلم',p:'معافیت پیشرفت'} as any)[st]:'حضور'}</em></div>`}}
+  let gr=`<div class="cal"><div></div>${[0,1,2,3].map(d=>{const L=letterC(cl,d,w);return `<div class="ch" style="--gc:${GC[GL.indexOf(L)]}"><b>${DAYN[d]}</b><span>${jd(dateOf(w,d))}</span><i>${L}</i></div>`}).join('')}`;
+  for(let p=0;p<E.per;p++){gr+=`<div class="cp">${n(p+1)}</div>`;for(let d=0;d<4;d++){const st=status(id,cl,w,d,p);if(st)cnt++;gr+=`<div class="cell ${st?'x'+st:''}" style="--gc:${GC[GL.indexOf(letterC(cl,d,w))]}"><b>${esc(subj(cl,d,p))}</b><em>${st?({g:'معافیت گروه',f:'معافیت معلم',p:'معافیت پیشرفت'} as any)[st]:'حضور'}</em></div>`}}
   const hist=Object.keys(E.pw).filter(k=>E.pw[k][id]).sort((a,b)=>+b-+a);
   body=`<div class="c"><div class="tb"><b>گروه:</b><select onchange="setG('${id}',this.value)">${['','A','B','C','D'].map(L=>`<option value="${L}" ${(g||'')===L?'selected':''}>${L||'بدون گروه'}</option>`).join('')}</select></div></div>${wnav()}<p class="m">${n(cnt)} ساعت معافیت در این هفته</p>${gr}
   <div class="g2" style="margin-top:10px"><div class="c"><h3>معافیت پیشرفت این هفته</h3>${pw?`${pw.map((k:string)=>{const[d,p]=k.split('-');return `<span class="tag">${DAYN[+d]} ساعت ${n(+p+1)} ${esc(subj(cl,+d,+p))}</span>`}).join('')}<div style="margin-top:8px"><button class="btn" onclick="revoke('${id}')">لغو</button></div>`:`<button class="btn p" onclick="grant('${id}')">اعطا</button>`}<h3 style="margin-top:14px">درس‌های دلخواه برای معافیت</h3><div class="chips">${subs.map(k=>`<button class="${(E.skip[id]||[]).includes(k)?'on':''}" onclick="tgSkip('${id}','${esc(k)}')">${esc(k)}</button>`).join('')}</div></div>
@@ -249,9 +249,9 @@ function commitAll(){const bad:string[]=[];FILES.filter(f=>f.st==='ok'&&!f.done)
 const DAYN=['شنبه','یکشنبه','سه‌شنبه','چهارشنبه'],DOFF=[0,1,3,4],GL=['A','B','C','D'],GC=['#6366f1','#10b981','#f59e0b','#ec4899'],DAY=86400000;
 const mid=(d:Date)=>{const x=new Date(d);x.setHours(12,0,0,0);return x};
 function ensureEx(){
- if(D.ex)return D.ex;
+ if(D.ex){if(!D.ex.g2){D.ex.g2={};D.ex.gmode={};D.ex.g2c={};D.ex.dual={};CL.forEach(c=>{if(c.startsWith('تجربی'))D.ex.dual[c]=true})}return D.ex}
  const t=mid(new Date()),sat=new Date(t.getTime()-((t.getDay()+1)%7)*DAY);
- const E=D.ex={anchor:sat.toISOString().slice(0,10),per:4,tt:{},g:{},fixed:{},skip:{},pw:{}};
+ const E=D.ex={anchor:sat.toISOString().slice(0,10),per:4,tt:{},g:{},g2:{},gmode:{},g2c:{},dual:{},fixed:{},skip:{},pw:{}};CL.forEach(c=>{if(c.startsWith('تجربی'))E.dual[c]=true});
  const subs=['ریاضی','فیزیک','شیمی','زیست','ادبیات','عربی','دین و زندگی','زبان'];
  CL.forEach((c,ci)=>{{const L8=c.startsWith('ریاضی')?['ریاضی','هندسه','فیزیک','شیمی','ادبیات','عربی','دین و زندگی','زبان']:subs;E.tt[c]=[0,1,2,3].map(d=>Array.from({length:4},(_,p)=>L8[((d%2)*4+p+ci*3)%8]))}autoDiv(c,'n',true)});
  CL.forEach(c=>D.students.filter(x=>x.cls===c).slice(0,3).forEach(x=>E.skip[x.id]=['دین و زندگی','زبان']));
@@ -265,13 +265,21 @@ const wk0=()=>Math.floor((mid(new Date()).getTime()-wd(0))/(7*DAY));
 const letter=(d:number,w:number)=>GL[(((d+w+(D.ex?.rot||0))%4)+4)%4];
 const nm=(id:string)=>D.students.find(s=>s.id===id)?.name||'';
 const names=(ids:string[],m=6)=>ids.slice(0,m).map(nm).join('، ')+(ids.length>m?` و ${n(ids.length-m)} نفر دیگر`:'');
-const members=(cl:string,L:string)=>D.students.filter(s=>s.cls===cl&&D.ex.g[s.id]===L).map(s=>s.id);
+/* ---- گروه‌بندی چهارتایی / دوتایی (برای کلاس‌هایی که dual هستند؛ نوع هر هفته جداگانه انتخاب می‌شود) ---- */
+const G2=['A','B'];
+const isDual=(cl:string)=>!!(ensureEx().dual||{})[cl];
+const gmode=(cl:string,w:number):number=>isDual(cl)&&(((ensureEx().gmode||{})[cl]||{})[w])===2?2:4;
+const g2cfg=(cl:string,w:number)=>(((ensureEx().g2c||{})[cl]||{})[w])||{};
+function letterC(cl:string,d:number,w:number):string{if(gmode(cl,w)!==2)return letter(d,w);const c:any=g2cfg(cl,w),i=c.pat==='pair'?Math.floor(d/2):d%2,off=c.first==='A'?0:c.first==='B'?1:(((w%2)+2)%2);return G2[(i+off)%2]}
+const grp=(cl:string,w:number,sid:string):string=>gmode(cl,w)===2?((ensureEx().g2||{})[sid]||''):(ensureEx().g[sid]||'');
+const lets=(cl:string,w:number)=>gmode(cl,w)===2?G2:GL;
+const members=(cl:string,L:string,w:number=U.w)=>D.students.filter(s=>s.cls===cl&&grp(cl,w,s.id)===L).map(s=>s.id);
 function tt(cl:string){const E=ensureEx();if(!E.tt[cl])E.tt[cl]=[0,1,2,3].map(()=>[]);E.tt[cl].forEach(r=>{while(r.length<E.per)r.push('')});return E.tt[cl]}
 const subj=(cl:string,d:number,p:number)=>tt(cl)[d][p]||'—';
 const sameCells=(cl:string,d:number,p:number):string[]=>{const E=ensureEx(),sb=(tt(cl)[d][p]||'').trim();if(!sb||E.pair===false)return [cl+'|'+d+'-'+p];const o:string[]=[];for(let d2=0;d2<4;d2++)for(let p2=0;p2<E.per;p2++)if((tt(cl)[d2][p2]||'').trim()===sb)o.push(cl+'|'+d2+'-'+p2);return o};
 const fx=(cl:string,d:number,p:number):string[]=>{const F=ensureEx().fixed,u=new Set<string>();sameCells(cl,d,p).forEach(k=>(F[k]||[]).forEach((id:string)=>u.add(id)));return [...u].filter(id=>nm(id))};
 const pgIn=(cl:string,w:number,d:number,p:number)=>{const m=ensureEx().pw[w]||{};return Object.keys(m).filter(id=>m[id].includes(d+'-'+p)&&D.students.find(s=>s.id===id&&s.cls===cl))};
-function status(sid:string,cl:string,w:number,d:number,p:number){if(ensureEx().g[sid]===letter(d,w))return 'g';if(fx(cl,d,p).includes(sid))return 'f';if(((ensureEx().pw[w]||{})[sid]||[]).includes(d+'-'+p))return 'p';return null}
+function status(sid:string,cl:string,w:number,d:number,p:number){if(grp(cl,w,sid)&&grp(cl,w,sid)===letterC(cl,d,w))return 'g';if(fx(cl,d,p).includes(sid))return 'f';if(((ensureEx().pw[w]||{})[sid]||[]).includes(d+'-'+p))return 'p';return null}
 const seg=(k:string,o:string[][])=>`<div class="seg">${o.map(([v,t])=>`<button class="${U[k]===v?'on':''}" onclick="U.${k}='${v}';draw()">${t}</button>`).join('')}</div>`;
 const wstep=(k:number)=>{U.w=k===0?wk0():U.w+k;draw()};
 const rotBar=()=>`<div class="tb"><span class="m">گروهِ روز شنبه در این هفته:</span><div class="seg" style="margin:0">${GL.map(L=>`<button class="${letter(0,U.w)===L?'on':''}" onclick="setRot('${L}')">گروه ${L}</button>`).join('')}</div><span class="m">هفته‌های بعد خودکار می‌چرخد</span></div>`;
@@ -311,13 +319,13 @@ const ana=()=>seg('as',[['o','نمای کلی'],['c','نمودارها']])+(U.as
 function home(){const E=ensureEx(),off=Math.round((mid(new Date()).getTime()-wd(0))/DAY),w=Math.floor(off/7),o=((off%7)+7)%7;
  let di=DOFF.indexOf(o),ww=w,lab='امروز';
  if(di<0)for(let k=1;k<8;k++){const i=DOFF.indexOf((o+k)%7);if(i>=0){di=i;ww=w+Math.floor((o+k)/7);lab='روز مدرسه‌ی بعد — '+DAYN[i]+' '+jd(dateOf(ww,i));break}}
- const cards=CL.map((c,i)=>{const L=letter(di,ww),gm=members(c,L),m=E.pw[ww]||{};
+ const cards=CL.map((c,i)=>{const L=letterC(c,di,ww),gm=members(c,L,ww),m=E.pw[ww]||{};
   const fxs=new Set<string>();for(let p=0;p<E.per;p++)fx(c,di,p).forEach(x=>fxs.add(x));
   const pgs=Object.keys(m).filter(id=>nm(id)&&D.students.find(s=>s.id===id&&s.cls===c)&&m[id].some(k=>k.startsWith(di+'-')));
-  return `<div class="c hc" style="--gc:${GC[GL.indexOf(L)]}" onclick="U.xc='${c}';U.w=${ww};U.xs='cal';go('ex')"><div class="hl">${L}</div><div><b>${c}</b><div class="m">گروه ${L} معاف است · ${n(gm.length)} نفر</div><div class="m">${esc(names(gm,5))||'گروه‌بندی انجام نشده'}</div>${fxs.size?`<span class="tag">معلم: ${n(fxs.size)}</span>`:''}${pgs.length?`<span class="tag">پیشرفت: ${esc(names(pgs,3))}</span>`:''}</div></div>`}).join('');
+  return `<div class="c hc" style="--gc:${GC[GL.indexOf(L)]}" onclick="U.xc='${c}';U.w=${ww};U.xs='cal';go('ex')"><div class="hl">${L}</div><div><b>${c}</b><div class="m">گروه ${L}${gmode(c,ww)===2?' (گروه‌بندی دوتایی)':''} معاف است · ${n(gm.length)} نفر</div><div class="m">${esc(names(gm,5))||'گروه‌بندی انجام نشده'}</div>${fxs.size?`<span class="tag">معلم: ${n(fxs.size)}</span>`:''}${pgs.length?`<span class="tag">پیشرفت: ${esc(names(pgs,3))}</span>`:''}</div></div>`}).join('');
  const tl=(i:string,t:string,d:string,a:string)=>`<div class="c tl" onclick="${a}"><span>${i}</span><b>${t}</b><small>${d}</small></div>`;
  const hrN=new Date().getHours(),gr=hrN<12?'صبح بخیر':hrN<17?'ظهر بخیر':hrN<20?'عصر بخیر':'شب بخیر',ti=DOFF.indexOf(o);
- const strip=[0,1,2,3].map(d=>{const L=letter(d,w);return `<button class="wd ${d===ti?'now':''}" style="--gc:${GC[GL.indexOf(L)]}" onclick="U.w=${w};U.xs='cal';go('ex')"><small>${DAYN[d]}</small><b>${L}</b><span>${jd(dateOf(w,d))}</span></button>`}).join('');
+ const strip=[0,1,2,3].map(d=>{const Ls=[...new Set(CL.map(c=>letterC(c,d,w)))],L=Ls.join('·');return `<button class="wd ${d===ti?'now':''}" style="--gc:${GC[GL.indexOf(Ls[0])]}" onclick="U.w=${w};U.xs='cal';go('ex')"><small>${DAYN[d]}</small><b>${L}</b><span>${jd(dateOf(w,d))}</span></button>`}).join('');
  return `${SV.badge()}<div class="homehero"><div><small>${gr} 👋</small><h2>${lab}</h2></div><div class="strip">${strip}</div></div><div class="g2">${cards}</div>
  <div class="g tiles">${tl('📅','معافیت و تقویم','گروه‌ها، معلم، پیشرفت',"U.xs='cal';go('ex')")}${tl('👥','دانش‌آموزان','پروفایل و نمرات',"go('stu')")}${tl('🚫','حضور و غیاب','غیبت‌ها و وضعیت امروز',"go('day')")}${tl('📝','آزمون‌ها','کارنامه، نتایج، دانش‌آموزان',"xgo('in')")}${tl('📢','اطلاعیه‌ها','آزمون، جلسه، مهلت…',"go('ann')")}</div>`}
 
@@ -328,36 +336,36 @@ const fdn=(d:Date)=>d.toLocaleDateString('fa-IR',{day:'numeric'}),fmn=(d:Date)=>
 function xpg(){ensureEx();const cl=U.xc,w=U.w,E=D.ex,ss=D.students.filter((s:any)=>s.cls===cl),t0=mid(new Date()).getTime();let ti=-1;for(let d=0;d<4;d++)if(mid(dateOf(w,d)).getTime()===t0)ti=d;
  if(U.xd==null||U.xd>3||U.xd<0)U.xd=ti>=0?ti:0;
  const tset=new Set<string>();for(let d=0;d<4;d++)for(let p=0;p<E.per;p++)fx(cl,d,p).forEach((id:string)=>tset.add(id));
- const pgN=ss.filter((s:any)=>(E.pw[w]||{})[s.id]).length,ung=ss.filter((s:any)=>!E.g[s.id]).length,Ld=letter(U.xd,w),gN=members(cl,Ld).length;
+ const pgN=ss.filter((s:any)=>(E.pw[w]||{})[s.id]).length,ung=ss.filter((s:any)=>!grp(cl,w,s.id)).length,Ld=letterC(cl,U.xd,w),gN=members(cl,Ld,w).length;
  const k=(ic:string,b:any,t:string,col:string,hot?:boolean)=>`<div class="dykp ${hot?'hot':''}" style="--kc:${col}"><span>${ic}</span><b>${b}</b><small>${t}</small></div>`;
  const hero=`<div class="exhero"><div style="flex:1;min-width:0"><small>مدیریت معافیت‌ها</small><h2>${cl}</h2><small>${jd(dateOf(w,0))} تا ${jd(dateOf(w,3))}${w===wk0()?' · هفته‌ی جاری':''}</small></div><div class="exwn"><button onclick="wstep(-1)" title="هفته‌ی قبل">▶</button><button onclick="wstep(1)" title="هفته‌ی بعد">◀</button>${w!==wk0()?'<button onclick="wstep(0)">امروز</button>':''}</div></div>`;
  const tabs=[['cal','📅 تقویم'],['grp','👥 گروه‌ها'],['tt','🗓 برنامه و معلم'],['prg','🚀 پیشرفت']];
  return hero+`<div class="seg">${CL.map((c:string)=>`<button class="${cl===c?'on':''}" onclick="U.xc='${c}';U.sv='';draw()">${c}</button>`).join('')}</div>
- <div class="dykps">${k('👥',n(gN),`گروه ${Ld} · ${DAYN[U.xd]}`,GC[GL.indexOf(Ld)])}${k('🎓',n(tset.size),'معاف از معلم این هفته','#f59e0b')}${k('🚀',n(pgN),'معافیت پیشرفت این هفته','#ec4899')}${k('⚠',n(ung),'بدون گروه','#dc2626',ung>0)}</div>
+ <div class="dykps">${k('👥',n(gN),`گروه ${Ld}${gmode(cl,w)===2?' (۲گروهی)':''} · ${DAYN[U.xd]}`,GC[GL.indexOf(Ld)])}${k('🎓',n(tset.size),'معاف از معلم این هفته','#f59e0b')}${k('🚀',n(pgN),'معافیت پیشرفت این هفته','#ec4899')}${k('⚠',n(ung),'بدون گروه','#dc2626',ung>0)}</div>
  <div class="seg xtabs">${tabs.map(([v,t])=>`<button class="${U.xs===v?'on':''}" onclick="U.xs='${v}';draw()">${t}</button>`).join('')}</div>`+({cal:xcal,grp:xgrp,tt:xtt,prg:xprog} as any)[U.xs]()}
 function weekGrid(cl:string,w:number,sv:string,E:any){let g=`<div class="cal"><div></div>`,cnt=0;
- for(let d=0;d<4;d++){const L=letter(d,w);g+=`<div class="ch${mid(dateOf(w,d)).getTime()===mid(new Date()).getTime()?' tdy':''}" style="--gc:${GC[GL.indexOf(L)]}"><b>${DAYN[d]}</b><span>${jd(dateOf(w,d))}</span><i>${L}</i></div>`}
- for(let p=0;p<E.per;p++){g+=`<div class="cp">${n(p+1)}</div>`;for(let d=0;d<4;d++){const L=letter(d,w),c=GC[GL.indexOf(L)];
+ for(let d=0;d<4;d++){const L=letterC(cl,d,w);g+=`<div class="ch${mid(dateOf(w,d)).getTime()===mid(new Date()).getTime()?' tdy':''}" style="--gc:${GC[GL.indexOf(L)]}"><b>${DAYN[d]}</b><span>${jd(dateOf(w,d))}</span><i>${L}</i></div>`}
+ for(let p=0;p<E.per;p++){g+=`<div class="cp">${n(p+1)}</div>`;for(let d=0;d<4;d++){const L=letterC(cl,d,w),c=GC[GL.indexOf(L)];
   if(sv){const st=status(sv,cl,w,d,p);if(st)cnt++;g+=`<div class="cell ${st?'x'+st:''}" style="--gc:${c}" onclick="cellm(${d},${p})"><b>${esc(subj(cl,d,p))}</b><em>${st?EXN[st]:'حضور'}</em></div>`}
-  else{const f=fx(cl,d,p),pg=pgIn(cl,w,d,p);g+=`<div class="cell" style="--gc:${c}" onclick="cellm(${d},${p})"><b>${esc(subj(cl,d,p))}</b><em>گروه ${L} · ${n(members(cl,L).length)} نفر</em>${f.length?`<span class="tag">👤 معلم ${n(f.length)}</span>`:''}${pg.length?`<span class="tag">🚀 ${esc(pg.slice(0,2).map(nm).join('، '))}${pg.length>2?'…':''}</span>`:''}</div>`}}}
+  else{const f=fx(cl,d,p),pg=pgIn(cl,w,d,p);g+=`<div class="cell" style="--gc:${c}" onclick="cellm(${d},${p})"><b>${esc(subj(cl,d,p))}</b><em>گروه ${L} · ${n(members(cl,L,w).length)} نفر</em>${f.length?`<span class="tag">👤 معلم ${n(f.length)}</span>`:''}${pg.length?`<span class="tag">🚀 ${esc(pg.slice(0,2).map(nm).join('، '))}${pg.length>2?'…':''}</span>`:''}</div>`}}}
  return {g:g+'</div>',cnt}}
 function xcal(){const cl=U.xc,w=U.w,E=ensureEx(),ss=D.students.filter((s:any)=>s.cls===cl),sv=ss.find((s:any)=>s.id===U.sv)?U.sv:'',d=U.xd,t0=mid(new Date()).getTime();
- const strip=`<div class="dyds" style="margin:10px 0 12px">${[0,1,2,3].map(x=>{const L=letter(x,w),dt=dateOf(w,x);return `<button class="dyd ${x===d?'on':''} ${mid(dt).getTime()===t0?'td':''}" onclick="U.xd=${x};draw()"><small>${DAYN[x]}</small><b>${fdn(dt)}</b><span>${fmn(dt)}</span><i style="background:${GC[GL.indexOf(L)]}">${L}</i></button>`}).join('')}</div>`;
- const L=letter(d,w),gm=members(cl,L),gc=GC[GL.indexOf(L)];
- const banner=sv?`<div class="exday" style="--gc:${gc}"><div class="exg">${L}</div><div style="flex:1"><b>${esc(nm(sv))}</b><div class="m">${E.g[sv]===L?`✅ گروه ${L} است؛ ${DAYN[d]} <b>کل روز معاف</b> است.`:`گروه ${E.g[sv]||'—'} است؛ ${DAYN[d]} نوبت گروه ${L} است.`}</div></div></div>`
+ const strip=`<div class="dyds" style="margin:10px 0 12px">${[0,1,2,3].map(x=>{const L=letterC(cl,x,w),dt=dateOf(w,x);return `<button class="dyd ${x===d?'on':''} ${mid(dt).getTime()===t0?'td':''}" onclick="U.xd=${x};draw()"><small>${DAYN[x]}</small><b>${fdn(dt)}</b><span>${fmn(dt)}</span><i style="background:${GC[GL.indexOf(L)]}">${L}</i></button>`}).join('')}</div>`;
+ const L=letterC(cl,d,w),gm=members(cl,L,w),gc=GC[GL.indexOf(L)];
+ const banner=sv?`<div class="exday" style="--gc:${gc}"><div class="exg">${L}</div><div style="flex:1"><b>${esc(nm(sv))}</b><div class="m">${grp(cl,w,sv)===L?`✅ گروه ${L} است؛ ${DAYN[d]} <b>کل روز معاف</b> است.`:`گروه ${grp(cl,w,sv)||'—'} است؛ ${DAYN[d]} نوبت گروه ${L} است.`}</div></div></div>`
   :`<div class="exday" style="--gc:${gc}"><div class="exg">${L}</div><div style="flex:1;min-width:0"><b>گروه ${L} در ${DAYN[d]} معاف است</b> <span class="m">${n(gm.length)} نفر · کل روز</span><div class="exnames">${gm.map((id:string)=>`<span class="tag">${esc(nm(id))}</span>`).join('')||'<span class="m">هنوز گروهی تعیین نشده (تب گروه‌ها)</span>'}</div></div></div>`;
  const tl=Array.from({length:E.per},(_,p)=>{const sb=subj(cl,d,p);
   if(sv){const st=status(sv,cl,w,d,p);return `<div class="exp" style="--ec:${st?EXC[st]:'var(--bd)'}" onclick="cellm(${d},${p})"><span class="no">${n(p+1)}</span><div style="flex:1"><b>${esc(sb)}</b><div class="m">${st?EXN[st]:'حضور در کلاس'}</div></div>${st?`<span class="tag" style="background:${EXC[st]};color:#fff;border-color:${EXC[st]}">معاف</span>`:''}</div>`}
   const f=fx(cl,d,p),pg=pgIn(cl,w,d,p);
   return `<div class="exp" style="--ec:${gc}" onclick="cellm(${d},${p})"><span class="no">${n(p+1)}</span><div style="flex:1;min-width:0"><b>${esc(sb)}</b><div class="m">گروه ${L} معاف · ${n(gm.length)} نفر</div>${f.length?`<div class="exl f">🎓 معلم: ${esc(names(f,5))}</div>`:''}${pg.length?`<div class="exl p">🚀 پیشرفت: ${esc(names(pg,4))}</div>`:''}</div><span class="m">✎ ویرایش</span></div>`}).join('');
- const W=weekGrid(cl,w,sv,E),pool=ss.filter((x:any)=>!E.g[x.id]);
- return `<div class="tb"><select onchange="U.sv=this.value;draw()" style="min-width:170px"><option value="">👥 نمای کل کلاس</option>${ss.map((x:any)=>`<option value="${x.id}" ${x.id===sv?'selected':''}>${esc(x.name)}</option>`).join('')}</select><button class="btn p" onclick="xpng()">📤 تصویر برای ارسال</button><button class="btn" onclick="window.print()">چاپ</button>${sv?`<span class="m">${n(W.cnt)} ساعت معافیت این هفته</span>`:''}</div>
+ const W=weekGrid(cl,w,sv,E),pool=ss.filter((x:any)=>!grp(cl,w,x.id));
+ return modeCard(cl,w)+`<div class="tb"><select onchange="U.sv=this.value;draw()" style="min-width:170px"><option value="">👥 نمای کل کلاس</option>${ss.map((x:any)=>`<option value="${x.id}" ${x.id===sv?'selected':''}>${esc(x.name)}</option>`).join('')}</select><button class="btn p" onclick="xpng()">📤 تصویر برای ارسال</button><button class="btn" onclick="window.print()">چاپ</button>${sv?`<span class="m">${n(W.cnt)} ساعت معافیت این هفته</span>`:''}</div>
  ${strip}${banner}<div class="extl">${tl}</div><p class="m" style="margin:6px 2px">روی هر ساعت بزنید تا معافیت معلم و پیشرفت همان ساعت را ویرایش کنید.</p>
  <details class="c" style="margin-top:12px"><summary style="cursor:pointer"><b>🗓 نمای کل هفته</b> <span class="m">همه‌ی روزها و ساعت‌ها در یک نگاه</span></summary>${W.g}</details>
- <div class="g" style="margin-top:12px">${GL.map((G,i)=>`<div class="c" style="border-top:4px solid ${GC[i]}"><b>گروه ${G}</b> <span class="m">${n(members(cl,G).length)} نفر</span><div class="m">معاف: ${[0,1,2,3].filter(x=>letter(x,w)===G).map(x=>DAYN[x]).join('، ')}</div><div class="m">${esc(names(members(cl,G),4))}</div></div>`).join('')}</div>
+ <div class="g" style="margin-top:12px">${lets(cl,w).map((G:string)=>`<div class="c" style="border-top:4px solid ${GC[GL.indexOf(G)]}"><b>گروه ${G}</b> <span class="m">${n(members(cl,G,w).length)} نفر</span><div class="m">معاف: ${[0,1,2,3].filter(x=>letterC(cl,x,w)===G).map(x=>DAYN[x]).join('، ')}</div><div class="m">${esc(names(members(cl,G,w),4))}</div></div>`).join('')}</div>
  ${pool.length?`<p class="dn">${n(pool.length)} نفر هنوز گروه ندارند (تب گروه‌ها).</p>`:''}
- <details class="c" style="margin-top:10px"><summary style="cursor:pointer"><b>⚙ چرخش گروه‌ها</b></summary>${rotBar()}</details>`}
-function cellm(d:number,p:number){const cl=U.xc,w=U.w,L=letter(d,w),key=d+'-'+p,fl=fx(cl,d,p),gm=members(cl,L),pg=pgIn(cl,w,d,p),all=D.students.filter((s:any)=>s.cls===cl).sort(byNum),gc=GC[GL.indexOf(L)];U.cmd=[d,p];
+ ${gmode(cl,w)===2?'':`<details class="c" style="margin-top:10px"><summary style="cursor:pointer"><b>⚙ چرخش گروه‌ها</b></summary>${rotBar()}</details>`}`}
+function cellm(d:number,p:number){const cl=U.xc,w=U.w,L=letterC(cl,d,w),key=d+'-'+p,fl=fx(cl,d,p),gm=members(cl,L,w),pg=pgIn(cl,w,d,p),all=D.students.filter((s:any)=>s.cls===cl).sort(byNum),gc=GC[GL.indexOf(L)];U.cmd=[d,p];
  $('#mb').innerHTML=`<div class="tb"><div class="exday" style="--gc:${gc};flex:1;margin:0"><div class="exg">${n(p+1)}</div><div style="flex:1"><b style="font-size:17px">${esc(subj(cl,d,p))}</b><div class="m">${DAYN[d]} ${jd(dateOf(w,d))} · ساعت ${n(p+1)}</div></div></div><button class="btn" onclick="cm()">بستن</button></div>
  <div class="c exsec" style="--sc:${gc}"><h3>👥 معافیت گروه ${L} <span class="m">${n(gm.length)} نفر</span></h3><div>${gm.map((id:string)=>`<span class="tag">${esc(nm(id))}</span>`).join('')||'<span class="m">گروهی تعیین نشده</span>'}</div></div>
  <div class="c exsec" style="--sc:#f59e0b"><h3>🎓 معافیت معلم — هر هفته</h3>${sameCells(cl,d,p).length>1?`<p class="m" style="margin:0 0 8px">این درس ${n(sameCells(cl,d,p).length)} جلسه در هفته دارد؛ انتخاب‌ها برای همه‌ی جلسه‌ها اعمال می‌شود.</p>`:''}<div class="chk">${all.map((s:any)=>`<label><input type="checkbox" ${fl.includes(s.id)?'checked':''} onchange="tgFx('${cl}','${key}','${s.id}',this.checked)"> ${esc(s.name)}</label>`).join('')}</div></div>
@@ -371,7 +379,7 @@ function defRng(cl:string){const ss=D.students.filter(s=>s.cls===cl).sort(byNum)
 const rngOf=(cl:string)=>{const E=ensureEx();E.rng=E.rng||{};return E.rng[cl]||(E.rng[cl]=defRng(cl))};
 function applyRng(cl:string,quiet?:boolean){const E=ensureEx(),r=rngOf(cl);D.students.filter(s=>s.cls===cl).forEach(s=>{delete E.g[s.id];GL.forEach(L=>{const[a,b]=r[L];if(a!=null&&b!=null&&s.num>=a&&s.num<=b)E.g[s.id]=L})});if(!quiet){save();draw()}}
 const setRng=(cl:string,L:string,i:number,v:string)=>{rngOf(cl)[L][i]=+v||null;save()};
-function xgrp(){const cl=U.xc,E=ensureEx(),ss=snap().filter((s:any)=>s.cls===cl).sort(byNum),pool=ss.filter((s:any)=>!E.g[s.id]),r=rngOf(cl),tot=ss.length||1;
+function xgrp4(cl:string){const E=ensureEx(),ss=snap().filter((s:any)=>s.cls===cl).sort(byNum),pool=ss.filter((s:any)=>!E.g[s.id]),r=rngOf(cl),tot=ss.length||1;
  const mrow=(s:any)=>`<div class="exm"><span class="av">${s.num?n(s.num):'·'}</span><span style="flex:1;min-width:0">${esc(s.name)}</span><select onchange="setG('${s.id}',this.value)" title="جابه‌جایی به گروه دیگر">${['','A','B','C','D'].map(L=>`<option value="${L}" ${(E.g[s.id]||'')===L?'selected':''}>${L||'بدون گروه'}</option>`).join('')}</select></div>`;
  const bar=`<div class="exbar">${GL.map((L,i)=>{const c=ss.filter((s:any)=>E.g[s.id]===L).length;return c?`<span style="flex:${c};background:${GC[i]}" title="گروه ${L}: ${c} نفر">${L} · ${n(c)}</span>`:''}).join('')}${pool.length?`<span style="flex:${pool.length};background:#94a3b8">؟ · ${n(pool.length)}</span>`:''}</div>`;
  return `<div class="c"><b>توزیع دانش‌آموزان ${cl} در گروه‌ها</b>${bar}<p class="m" style="margin:6px 0 0">هر روز مدرسه یک گروه کل روز معاف است. چرخش هفتگی: ABCD ← BCDA ← CDAB ← DABC. برای جابه‌جایی هر نفر، منوی کنار نامش را عوض کنید.</p></div>
@@ -381,7 +389,39 @@ function xgrp(){const cl=U.xc,E=ensureEx(),ss=snap().filter((s:any)=>s.cls===cl)
   <div class="tb"><button class="btn p" onclick="applyRng('${cl}')">اعمال بازه‌ها</button><button class="btn" onclick="autoDiv('${cl}','n')">بازه‌های پیشنهادی (${n(Math.floor(ss.length/4))} نفر برای هر گروه)</button></div>
   <div class="tb"><span class="m">ترتیب‌های دیگر:</span><select onchange="U.gm=this.value">${[['a','الفبایی'],['l','بر اساس تراز'],['r','تصادفی'],['b','متوازن (مارپیچ)']].map(([v,t])=>`<option value="${v}" ${U.gm===v?'selected':''}>${t}</option>`).join('')}</select><button class="btn" onclick="autoDiv('${cl}',U.gm)">تقسیم با این ترتیب</button></div></details>
  <div class="g2" style="margin-top:12px">${GL.map((L,i)=>{const m=ss.filter((s:any)=>E.g[s.id]===L);return `<div class="exgc" style="--gc:${GC[i]}"><div class="exgh"><i>${L}</i><b>گروه ${L}</b><span>${n(m.length)} نفر</span></div>${m.map(mrow).join('')||'<p class="m" style="padding:8px">خالی</p>'}</div>`}).join('')}${pool.length?`<div class="exgc" style="--gc:#94a3b8"><div class="exgh"><i>؟</i><b>بدون گروه</b><span>${n(pool.length)} نفر</span></div>${pool.map(mrow).join('')}</div>`:''}</div>`}
-const setG=(id:string,L:string)=>{if(L)ensureEx().g[id]=L;else delete ensureEx().g[id];save();draw()};
+const setG=(id:string,L:string,m:number=4)=>{const E=ensureEx(),st=m===2?(E.g2=E.g2||{}):E.g;if(L)st[id]=L;else delete st[id];save();draw()};
+
+/* ---- انتخاب نوع گروه‌بندی هر هفته (کلاس‌های دوگانه) ---- */
+const seg2=(opts:string[][],cur:string,fn:string)=>`<div class="seg" style="margin:0">${opts.map(([v,t])=>`<button class="${cur===v?'on':''}" onclick="${fn.replace('@',v)}">${t}</button>`).join('')}</div>`;
+function setGMode(cl:string,w:number,m:number){const E=ensureEx();(E.gmode[cl]=E.gmode[cl]||{})[w]=m;save();draw()}
+function setG2c(cl:string,w:number,k:string,v:string){const E=ensureEx();((E.g2c[cl]=E.g2c[cl]||{})[w]=E.g2c[cl][w]||{})[k]=v;save();draw()}
+function setDual(cl:string,v:boolean){ensureEx().dual[cl]=v;save();draw()}
+function gmodeAll(w:number,m:number,span:number=1){const E=ensureEx();CL.filter(isDual).forEach(c=>{for(let k=0;k<span;k++)(E.gmode[c]=E.gmode[c]||{})[w+k]=m});save();draw()}
+function gmodeAlt(w:number,span:number){const E=ensureEx();CL.filter(isDual).forEach(c=>{for(let k=0;k<span;k++)(E.gmode[c]=E.gmode[c]||{})[w+k]=k%2?2:4});save();draw()}
+function modeCard(cl:string,w:number){if(!isDual(cl))return '';const m=gmode(cl,w),c:any=g2cfg(cl,w);
+ return `<div class="c exmode"><div class="tb" style="margin:0 0 8px"><b>🔀 نوع گروه‌بندی این هفته</b><span class="m">${cl}</span><span style="flex:1"></span>${seg2([['4','۴ گروهی (A B C D)'],['2','۲ گروهی (A B)']],String(m),`setGMode('${cl}',${w},+'@')`)}</div>
+ ${m===2?`<div class="tb" style="margin:0 0 8px"><span class="m">الگوی روزها:</span>${seg2([['alt','یک‌درمیان (A B A B)'],['pair','دوبه‌دو (A A B B)']],c.pat==='pair'?'pair':'alt',`setG2c('${cl}',${w},'pat','@')`)}<span class="m">شروع با:</span>${seg2([['auto','خودکار'],['A','A'],['B','B']],c.first||'auto',`setG2c('${cl}',${w},'first','@')`)}</div>`:''}
+ <div class="exprev">${[0,1,2,3].map(d=>{const L=letterC(cl,d,w);return `<span style="--gc:${GC[GL.indexOf(L)]}"><small>${DAYN[d]}</small><b>${L}</b></span>`}).join('')}</div></div>`}
+function planner(){const dc=CL.filter(isDual);if(!dc.length)return '';const E=ensureEx(),w0=wk0()-1,rows=[];
+ for(let w=w0;w<w0+10;w++){rows.push(`<tr class="${w===U.w?'sel':''}"><td style="white-space:nowrap"><b>${jd(dateOf(w,0))}</b> <span class="m">تا ${jd(dateOf(w,3))}</span>${w===wk0()?' <span class="tag">این هفته</span>':''}</td>${dc.map(c=>{const m=gmode(c,w);return `<td>${seg2([['4','۴'],['2','۲']],String(m),`setGMode('${c}',${w},+'@')`)}<div class="m" style="font-size:11px;text-align:center">${[0,1,2,3].map(d=>letterC(c,d,w)).join(' ')}</div></td>`}).join('')}<td><button class="btn" onclick="U.w=${w};draw()">دیدن</button></td></tr>`)}
+ return `<details class="c" style="margin-top:10px" open><summary style="cursor:pointer"><b>🗓 برنامه‌ریزی نوع گروه‌بندی هفته‌ها</b> <span class="m">برای هر هفته و هر کلاس انتخاب کنید</span></summary>
+ <div class="tb" style="margin-top:8px"><span class="m">میان‌بر (۸ هفته از این هفته):</span><button class="btn" onclick="gmodeAll(wk0(),4,8)">همه ۴گروهی</button><button class="btn" onclick="gmodeAll(wk0(),2,8)">همه ۲گروهی</button><button class="btn" onclick="gmodeAlt(wk0(),8)">یک‌هفته ۴گروهی، یک‌هفته ۲گروهی</button></div>
+ <div class="tw"><table class="explan"><thead><tr><th>هفته</th>${dc.map(c=>`<th style="text-align:center">${c}</th>`).join('')}<th></th></tr></thead><tbody>${rows.join('')}</tbody></table></div></details>`}
+function xgrp(){const cl=U.xc,dual=isDual(cl),cm=gmode(cl,U.w),em=dual?(U.gv?+U.gv:cm):4;
+ const ctl=dual?`${modeCard(cl,U.w)}${planner()}<div class="c" style="margin-top:10px"><div class="tb" style="margin:0"><b>✏️ ویرایش اعضای:</b>${seg2([['4','گروه‌بندی چهارتایی'],['2','گروه‌بندی دوتایی']],String(em),`U.gv=+'@';draw()`)}${em!==cm?`<span class="dn">⚠ این هفته ${cm===2?'دوتایی':'چهارتایی'} است؛ شما گروه‌بندی ${em===2?'دوتایی':'چهارتایی'} را ویرایش می‌کنید.</span>`:''}</div><label class="m" style="display:block;margin-top:8px"><input type="checkbox" checked onchange="setDual('${cl}',this.checked)"> این کلاس گروه‌بندی دوتایی هم دارد (برای برداشتن تیک بزنید؛ داده‌ها حفظ می‌شود)</label></div>`
+  :`<details class="c" style="margin-bottom:10px"><summary style="cursor:pointer" class="m">⚙ این کلاس هم گروه‌بندی دوتایی دارد؟</summary><label style="display:block;margin-top:8px"><input type="checkbox" onchange="setDual('${cl}',this.checked)"> بله، برای این کلاس هم می‌خواهم هر هفته بین گروه‌بندی چهارتایی و دوتایی انتخاب کنم</label></details>`;
+ return ctl+(em===2?xgrp2(cl):xgrp4(cl))}
+function autoDiv2(cl:string,mode:string){const E=ensureEx();E.g2=E.g2||{};const ss=snap().filter((s:any)=>s.cls===cl);ss.forEach((s:any)=>delete E.g2[s.id]);
+ if(mode==='q')ss.forEach((s:any)=>{const g=E.g[s.id];if(g==='A'||g==='B')E.g2[s.id]='A';else if(g==='C'||g==='D')E.g2[s.id]='B'});
+ else{const a=[...ss];if(mode==='h')a.sort(byNum);else if(mode==='a')a.sort((x:any,y:any)=>x.name.localeCompare(y.name,'fa'));else if(mode==='l')a.sort((x:any,y:any)=>(y.l||0)-(x.l||0));else a.sort(()=>Math.random()-.5);
+  const half=Math.ceil(a.length/2);a.forEach((s:any,i:number)=>{E.g2[s.id]=mode==='l'?[0,1,1,0][i%4]?'B':'A':i<half?'A':'B'})}
+ save();draw()}
+function xgrp2(cl:string){const E=ensureEx();E.g2=E.g2||{};const ss=snap().filter((s:any)=>s.cls===cl).sort(byNum),pool=ss.filter((s:any)=>!E.g2[s.id]);
+ const mrow=(s:any)=>`<div class="exm"><span class="av">${s.num?n(s.num):'·'}</span><span style="flex:1;min-width:0">${esc(s.name)}</span><select onchange="setG('${s.id}',this.value,2)">${['','A','B'].map(L=>`<option value="${L}" ${(E.g2[s.id]||'')===L?'selected':''}>${L||'بدون گروه'}</option>`).join('')}</select></div>`;
+ const bar=`<div class="exbar">${G2.map(L=>{const c=ss.filter((s:any)=>E.g2[s.id]===L).length;return c?`<span style="flex:${c};background:${GC[GL.indexOf(L)]}">${L} · ${n(c)}</span>`:''}).join('')}${pool.length?`<span style="flex:${pool.length};background:#94a3b8">؟ · ${n(pool.length)}</span>`:''}</div>`;
+ return `<div class="c" style="margin-top:10px"><b>گروه‌بندی دوتایی ${cl}</b>${bar}<p class="m" style="margin:6px 0 8px">دو گروه A و B؛ هر گروه در هفته‌هایی که «۲ گروهی» انتخاب شده، دو روز از چهار روز مدرسه معاف است. این گروه‌بندی کاملاً جدا از گروه‌های چهارتایی نگهداری می‌شود.</p>
+ <div class="tb"><span class="m">تقسیم خودکار:</span><button class="btn p" onclick="autoDiv2('${cl}','q')">از روی چهارتایی (A+B ← A ، C+D ← B)</button><button class="btn" onclick="autoDiv2('${cl}','h')">نصف‌نصف بر اساس شماره</button><button class="btn" onclick="autoDiv2('${cl}','a')">الفبایی</button><button class="btn" onclick="autoDiv2('${cl}','l')">متوازن بر اساس تراز</button><button class="btn" onclick="autoDiv2('${cl}','r')">تصادفی</button></div></div>
+ <div class="g2" style="margin-top:12px">${G2.map(L=>{const m=ss.filter((s:any)=>E.g2[s.id]===L);return `<div class="exgc" style="--gc:${GC[GL.indexOf(L)]}"><div class="exgh"><i>${L}</i><b>گروه ${L} (دوتایی)</b><span>${n(m.length)} نفر</span></div>${m.map(mrow).join('')||'<p class="m" style="padding:8px">خالی</p>'}</div>`}).join('')}${pool.length?`<div class="exgc" style="--gc:#94a3b8"><div class="exgh"><i>؟</i><b>بدون گروه</b><span>${n(pool.length)} نفر</span></div>${pool.map(mrow).join('')}</div>`:''}</div>`}
 function autoDiv(cl:string,mode:string,quiet?:boolean){const E=D.ex;
  if(mode==='n'||mode==='i'){E.rng=E.rng||{};E.rng[cl]=defRng(cl);applyRng(cl,true);if(!quiet){save();draw()}return}
  const ss=snap().filter(s=>s.cls===cl);ss.forEach(s=>delete E.g[s.id]);
@@ -396,7 +436,7 @@ function xtt(){const cl=U.xc,E=ensureEx(),T=tt(cl),subs=[...new Set(SUBJ.concat(
  <label class="exopt"><input type="checkbox" ${E.pair!==false?'checked':''} onchange="setPair(this.checked)"> <span><b>درس‌های دو جلسه‌ای:</b> دانش‌آموزان معاف از کلاس یک معلم، در همه‌ی ساعت‌هایی که همان درس نوشته شده معاف باشند.</span></label>
  <p class="m" style="margin:8px 0 0">درس هر ساعت را بنویسید. دکمه‌ی 👤 برای معلمی است که می‌گوید «هر کس نمی‌خواهد، شرکت نکند»؛ دانش‌آموزان معاف آن ساعت را از آنجا انتخاب می‌کنید.</p></div>
  <div class="xttg">`;
- for(let d=0;d<4;d++){const L=letter(d,U.w);h+=`<div class="c xttd" style="--gc:${GC[GL.indexOf(L)]}"><div class="xtth"><b>${DAYN[d]}</b></div>`;
+ for(let d=0;d<4;d++){const L=letterC(cl,d,U.w);h+=`<div class="c xttd" style="--gc:${GC[GL.indexOf(L)]}"><div class="xtth"><b>${DAYN[d]}</b></div>`;
   for(let p=0;p<E.per;p++)h+=`<div class="xttr"><span class="no">${n(p+1)}</span><input list="sj" value="${esc(T[d][p]||'')}" placeholder="درس…" onchange="setT('${cl}',${d},${p},this.value)"><button class="btn" onclick="cellm(${d},${p})" title="معافیت معلم این ساعت">👤${n(fx(cl,d,p).length)}</button></div>`;
   h+='</div>'}
  return h+'</div>'}
@@ -425,25 +465,25 @@ function revoke(id:string){const m=ensureEx().pw[U.w]||{};delete m[id];save();dr
 /* export image */
 let FB:string|null=null;
 async function fontB64(){if(FB)return FB;const b=new Uint8Array(await (await fetch(fontUrl)).arrayBuffer());let t='';for(let i=0;i<b.length;i+=8192)t+=String.fromCharCode(...b.subarray(i,i+8192));return FB=btoa(t)}
-function svgOf(cl:string,w:number,sv:string,font:string){const E=ensureEx(),W=940,pad=16,lw=46,cw=(W-2*pad-lw)/4,rh=84,top=100,leg=sv?0:GL.length*26+14,H=top+E.per*rh+leg+pad,X=(d:number)=>W-pad-lw-(d+1)*cw;
+function svgOf(cl:string,w:number,sv:string,font:string){const E=ensureEx(),W=940,pad=16,lw=46,cw=(W-2*pad-lw)/4,rh=84,top=100,leg=sv?0:lets(cl,w).length*26+14,H=top+E.per*rh+leg+pad,X=(d:number)=>W-pad-lw-(d+1)*cw;
  const stn:any={g:'معافیت گروه',f:'معافیت معلم',p:'معافیت پیشرفت'},col:any={g:'#10b981',f:'#f59e0b',p:'#ec4899'};
  const T=(x:number,y:number,t:string,sz=14,c='#1b1d2a',wt=400)=>`<text x="${x}" y="${y}" text-anchor="middle" font-size="${sz}" fill="${c}" font-weight="${wt}">${esc(t)}</text>`;
  let s=`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" direction="rtl"><style>@font-face{font-family:V;src:url(data:font/woff2;base64,${font})}text{font-family:V,Tahoma,sans-serif}</style><rect width="100%" height="100%" fill="#f4f5fa"/>`;
  s+=T(W/2,34,`برنامه‌ی هفتگی ${cl}${sv?' — '+nm(sv):''}`,22,'#1b1d2a',800)+T(W/2,60,`${jd(dateOf(w,0))} تا ${jd(dateOf(w,3))}`,14,'#6b6f85');
- for(let d=0;d<4;d++){const L=letter(d,w),c=GC[GL.indexOf(L)];s+=`<rect x="${X(d)+3}" y="72" width="${cw-6}" height="40" rx="10" fill="${c}"/>`+T(X(d)+cw/2,90,DAYN[d]+' · '+jd(dateOf(w,d)),14,'#fff',800)+T(X(d)+cw/2,106,'گروه '+L,11,'#fff')}
+ for(let d=0;d<4;d++){const L=letterC(cl,d,w),c=GC[GL.indexOf(L)];s+=`<rect x="${X(d)+3}" y="72" width="${cw-6}" height="40" rx="10" fill="${c}"/>`+T(X(d)+cw/2,90,DAYN[d]+' · '+jd(dateOf(w,d)),14,'#fff',800)+T(X(d)+cw/2,106,'گروه '+L,11,'#fff')}
  for(let p=0;p<E.per;p++){const y=top+16+p*rh;s+=T(W-pad-lw/2,y+rh/2,String(p+1).replace(/\d/g,x=>'۰۱۲۳۴۵۶۷۸۹'[+x]),16,'#6b6f85',800);
-  for(let d=0;d<4;d++){const L=letter(d,w),c=GC[GL.indexOf(L)],st=sv?status(sv,cl,w,d,p):null,f=fx(cl,d,p),pg=pgIn(cl,w,d,p);
+  for(let d=0;d<4;d++){const L=letterC(cl,d,w),c=GC[GL.indexOf(L)],st=sv?status(sv,cl,w,d,p):null,f=fx(cl,d,p),pg=pgIn(cl,w,d,p);
    s+=`<rect x="${X(d)+3}" y="${y}" width="${cw-6}" height="${rh-8}" rx="10" fill="${st?col[st]+'33':'#fff'}" stroke="${st?col[st]:'#e3e5ef'}" stroke-width="${st?2:1}"/>`+T(X(d)+cw/2,y+26,subj(cl,d,p),16,'#1b1d2a',800);
    if(sv)s+=T(X(d)+cw/2,y+52,st?stn[st]:'حضور',13,st?col[st]:'#6b6f85',st?800:400);
    else{let k=0;if(f.length)s+=T(X(d)+cw/2,y+46+13*k++,'معلم: '+names(f,2),11,'#b45309');if(pg.length)s+=T(X(d)+cw/2,y+46+13*k++,'پیشرفت: '+names(pg,2),11,'#be185d')}}}
- if(!sv)GL.forEach((L,i)=>{const y=top+16+E.per*rh+10+i*26,t=members(cl,L);s+=`<circle cx="${W-pad-10}" cy="${y-4}" r="9" fill="${GC[i]}"/>`+T(W-pad-10,y,L,11,'#fff',800)+`<text x="${W-pad-28}" y="${y}" text-anchor="start" direction="rtl" font-size="13" fill="#1b1d2a" style="unicode-bidi:plaintext">${esc(names(t,9))}</text>`});
+ if(!sv)lets(cl,w).forEach((L:string,i:number)=>{const y=top+16+E.per*rh+10+i*26,t=members(cl,L,w);s+=`<circle cx="${W-pad-10}" cy="${y-4}" r="9" fill="${GC[GL.indexOf(L)]}"/>`+T(W-pad-10,y,L,11,'#fff',800)+`<text x="${W-pad-28}" y="${y}" text-anchor="start" direction="rtl" font-size="13" fill="#1b1d2a" style="unicode-bidi:plaintext">${esc(names(t,9))}</text>`});
  return s+'</svg>'}
 async function xpng(){const sv=U.sv&&D.students.find(s=>s.id===U.sv&&s.cls===U.xc)?U.sv:'',svg=svgOf(U.xc,U.w,sv,await fontB64());
  const img=new Image();img.onload=()=>{const k=2,cv=document.createElement('canvas');cv.width=img.width*k;cv.height=img.height*k;const c=cv.getContext('2d');c.scale(k,k);c.drawImage(img,0,0);cv.toBlob(b=>saveFile(`${U.xc}-${sv?nm(sv)+'-':''}هفته.png`,b),'image/png')};
  img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg)}
-const SV=mkServer({get D(){return D},annActive:()=>annActive(),toast,sexams,save,draw:()=>draw(),esc,n,saveFile,ensureEx,tt,status,letter,dateOf,wk0,commit:(f:any)=>commit(f),CFG,U});
+const SV=mkServer({get D(){return D},annActive:()=>annActive(),toast,letterC,sexams,save,draw:()=>draw(),esc,n,saveFile,ensureEx,tt,status,letter,dateOf,wk0,commit:(f:any)=>commit(f),CFG,U});
 const EX=mkExams({get D(){return D},U,save,draw:()=>draw(),esc,n,n1,avg,line,hue,spark,CL,byNum,today,SV,scn,schp:()=>schp(),FILES:()=>FILES,dlf:(...a:any[])=>(dlf as any)(...a),toast});
-const AT2=mkAttend({get D(){return D},U,esc,n,save,draw:()=>draw(),toast,dateOf,wk0,mid,DAYN,GL,GC,CL,letter,status,subj,byNum,SV,dlf:(...a:any[])=>(dlf as any)(...a),bars,op,sf});
+const AT2=mkAttend({get D(){return D},U,letterC,esc,n,save,draw:()=>draw(),toast,dateOf,wk0,mid,DAYN,GL,GC,CL,letter,status,subj,byNum,SV,dlf:(...a:any[])=>(dlf as any)(...a),bars,op,sf});
 AP=SV.autoPub;
 Object.assign(W,SV.h,EX.h,AT2.h);
 SV.init();
@@ -518,6 +558,6 @@ if(typeof document.addEventListener==='function'){
 initUi();
 initPwa();
 
-Object.assign(W,{snaps,snapRestore,annOnly,setRot,annType,annExp,annNew,annDel,annClean,restoreB,openPal,palGo,palHi,toast,stuNav,addNote,delNote,rd,repCsv,repg,setNum,renum,sf,applyRng,setRng,setPair,schp,newSch,schS,schL,schLA,schLR,schDel,schCsv,cellm,tgFx,addPw,rmPw,setG,autoDiv,setT,per,grant,revoke,tgSkip,wstep,xpng,home,U,D,go,draw,op,cm,sg,sn,delS,addS,sr,addE,paste,delE,x1,x2,x3,x4,bk,reset,wipe,pick,rmf,sfs,er,commit1,commitAll,get FILES(){return FILES},set FILES(v){FILES=v}});
+Object.assign(W,{setGMode,setG2c,setDual,gmodeAll,gmodeAlt,autoDiv2,wk0,snaps,snapRestore,annOnly,setRot,annType,annExp,annNew,annDel,annClean,restoreB,openPal,palGo,palHi,toast,stuNav,addNote,delNote,rd,repCsv,repg,setNum,renum,sf,applyRng,setRng,setPair,schp,newSch,schS,schL,schLA,schLR,schDel,schCsv,cellm,tgFx,addPw,rmPw,setG,autoDiv,setT,per,grant,revoke,tgSkip,wstep,xpng,home,U,D,go,draw,op,cm,sg,sn,delS,addS,sr,addE,paste,delE,x1,x2,x3,x4,bk,reset,wipe,pick,rmf,sfs,er,commit1,commitAll,get FILES(){return FILES},set FILES(v){FILES=v}});
 draw();
 }

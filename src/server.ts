@@ -155,7 +155,7 @@ export function mkServer(A: any) {
   /* ---- publish ---- */
   function calOf(lid: string, cls: string, w: number) {
     const E = A.ensureEx();
-    return { per: E.per, days: [0, 1, 2, 3].map((d) => ({ d, date: A.dateOf(w, d).toISOString().slice(0, 10), L: A.letter(d, w), cells: Array.from({ length: E.per }, (_, p) => ({ s: A.tt(cls)[d][p] || '—', t: A.status(lid, cls, w, d, p) })) })) };
+    return { per: E.per, days: [0, 1, 2, 3].map((d) => ({ d, date: A.dateOf(w, d).toISOString().slice(0, 10), L: A.letterC(cls, d, w), cells: Array.from({ length: E.per }, (_, p) => ({ s: A.tt(cls)[d][p] || '—', t: A.status(lid, cls, w, d, p) })) })) };
   }
   const lastSig: Record<string, string> = {}; // آخرین نسخه‌ی ارسال‌شده‌ی هر ردیف؛ برای ارسال فقط موارد تغییرکرده
   async function publish(lids?: string[]) {
