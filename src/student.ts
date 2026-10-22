@@ -1,6 +1,6 @@
 // پنل دانش‌آموز: ورود، تقویم معافیت، آزمون‌ها، ارسال کارنامه
 import './style.css';
-import { ic, initUi, annHtml, daysLeft } from './ui';
+import { ic, initUi, annHtml, daysLeft, toast } from './ui';
 import { sb, cfgOk } from './supa';
 import { initPwa } from './pwa';
 import { importReport, ExamSettings } from './scan';
@@ -13,7 +13,7 @@ const DAYN = ['شنبه', 'یکشنبه', 'سه‌شنبه', 'چهارشنبه']
 const STN: any = { g: 'معاف (گروه)', f: 'معاف (معلم)', p: 'معاف (پیشرفت)' };
 const SUBJ = ['ریاضی', 'فیزیک', 'شیمی', 'زیست', 'ادبیات', 'عربی', 'دین و زندگی', 'زبان'];
 const CFG: ExamSettings = { sections: SUBJ.map((name, i) => ({ id: 'u' + i, name, color: '#888', n: 0, parts: [] })) };
-const T: any = { con: [], ann: [], xi: 'ماز', sch: [], u: null, me: null, exams: [], cal: [], pend: 0, p: 'home', wi: null, open: null, prev: null, err: '', busy: false, ok: '', login: '', rc: [], rw: 0, rd: 0, rerr: '' };
+const T: any = { con: [], ann: [], xi: 'ماز', sch: [], u: null, me: null, exams: [], cal: [], pend: 0, p: 'home', wi: null, open: null, prev: null, err: '', busy: false, ok: '', login: '', rc: [], rw: 0, rd: 0, rerr: '', ab: [], at: null, atErr: '', ae: {}, ab0: {}, atBusy: false };
 const W: any = window;
 const jdate = (iso: string, o: any = { day: 'numeric', month: 'long' }) => new Date(iso + 'T12:00:00').toLocaleDateString('fa-IR', o);
 const todayIso = () => { const t = new Date(), p = (x: number) => String(x).padStart(2, '0'); return `${t.getFullYear()}-${p(t.getMonth() + 1)}-${p(t.getDate())}`; };
@@ -34,7 +34,7 @@ async function login() {
 }
 async function logout() { await sb.auth.signOut(); T.u = null; T.me = null; T.p = 'home'; draw(); }
 async function load() {
-  const [m, e, c, s, h, an, cs] = await Promise.all([
+  const [m, e, c, s, h, an, cs, ab] = await Promise.all([
     sb.from('students').select('*').maybeSingle(),
     sb.from('exams_pub').select('*'),
     sb.from('calendar_pub').select('*').order('week_start'),
@@ -42,8 +42,9 @@ async function load() {
     sb.from('school_pub').select('*'),
     sb.from('announcements').select('*'),
     sb.from('consults').select('*').order('created_at', { ascending: false }),
+    sb.from('attendance').select('*').order('day', { ascending: false }),
   ]);
-  T.con = cs.data || [];
+  T.con = cs.data || []; T.ab = ab.error ? [] : ab.data || [];
   T.ann = (an.data || []).filter((a: any) => daysLeft(a.exp) >= 0 && (!a.starts || daysLeft(a.starts) <= 0)).sort((a: any, b: any) => (b.pin ? 1 : 0) - (a.pin ? 1 : 0) || (a.exp < b.exp ? -1 : 1));
   T.sch = (h.data || []).sort((a: any, b: any) => (a.date < b.date ? 1 : -1));
   T.me = m.data; T.exams = (e.data || []).sort((a: any, b: any) => (a.date < b.date ? -1 : 1)); T.cal = c.data || []; T.pend = s.count || 0;
@@ -52,6 +53,7 @@ async function load() {
     const r = await sb.rpc('class_calendar');
     if (r.error) T.rerr = r.error.message.includes('class_calendar') ? 'فایل supabase/update-8.sql روی سرور اجرا نشده است.' : r.error.message; else T.rc = r.data || [];
     const ws = [...new Set<string>(T.rc.map((x: any) => x.week_start))].sort(), iso0 = todayIso(); let q = 0; ws.forEach((w, i) => { if (w <= iso0) q = i; }); T.rw = q; T.rd = 0;
+    await loadAtt();
   }
   const iso = todayIso(); let k = -1; T.cal.forEach((r: any, i: number) => { if (r.week_start <= iso) k = i; }); T.wi = Math.max(k, 0);
 }
@@ -61,11 +63,11 @@ function draw() {
   document.body.classList.toggle('guest', !T.me);
   $('#who').textContent = T.me ? T.me.name : 'پنل دانش‌آموز';
   if (!T.me) { $('#nv').innerHTML = ''; $('#pt').textContent = 'ورود'; $('#app').innerHTML = loginView(); return; }
-  const P = [['home', 'خانه', 'home'], ['ann', 'اطلاعیه‌ها', 'bell'], ['con', 'وقت مشاوره', 'chat'], ['cal', 'تقویم معافیت', 'cal'], ...(T.me.is_rep ? [['rcal', 'تقویم معافیت کلاس', 'users']] : []), ['exm', 'آزمون‌ها', 'clip'], ['send', 'ارسال کارنامه', 'up']];
-  $('#nv').innerHTML = P.map(([k, t, i]) => `<button class="${T.p === k ? 'on' : ''}" onclick="go('${k}')" aria-label="${t}">${ic(i)}<span>${t}</span>${k === 'ann' && T.ann.length ? `<em class="bdg">${T.ann.length.toLocaleString('fa-IR')}</em>` : ''}${k === 'con' && upcoming().length ? `<em class="bdg" style="background:var(--ok)">${upcoming().length.toLocaleString('fa-IR')}</em>` : ''}</button>`).join('');
+  const P = [['home', 'خانه', 'home'], ['ann', 'اطلاعیه‌ها', 'bell'], ['con', 'وقت مشاوره', 'chat'], ['cal', 'تقویم معافیت', 'cal'], ['abs', 'غیبت‌های من', 'att'], ...(T.me.is_rep ? [['rat', 'حضور و غیاب کلاس', 'clip'], ['rcal', 'تقویم معافیت کلاس', 'users']] : []), ['exm', 'آزمون‌ها', 'clip'], ['send', 'ارسال کارنامه', 'up']];
+  $('#nv').innerHTML = P.map(([k, t, i]) => `<button class="${T.p === k ? 'on' : ''}" onclick="go('${k}')" aria-label="${t}">${ic(i)}<span>${t}</span>${k === 'abs' && pendingAbs().length ? `<em class="bdg">${pendingAbs().length.toLocaleString('fa-IR')}</em>` : ''}${k === 'ann' && T.ann.length ? `<em class="bdg">${T.ann.length.toLocaleString('fa-IR')}</em>` : ''}${k === 'con' && upcoming().length ? `<em class="bdg" style="background:var(--ok)">${upcoming().length.toLocaleString('fa-IR')}</em>` : ''}</button>`).join('');
   $('#pt').textContent = (P.find((p) => p[0] === T.p) || ['', ''])[1];
   const a = $('#app'); a.classList.remove('in'); void a.offsetWidth; a.classList.add('in');
-  a.innerHTML = ({ home, ann, con, cal, rcal, exm, send } as any)[T.p]();
+  a.innerHTML = ({ home, ann, con, cal, rcal, exm, send, abs, rat } as any)[T.p]();
 }
 const go = (p: string) => { T.p = p; T.ok = ''; T.err = ''; draw(); window.scrollTo(0, 0); };
 function loginView() {
@@ -74,21 +76,19 @@ function loginView() {
   return `<div class="c" style="max-width:360px;margin:30px auto"><h3 style="font-size:18px">ورود به پنل دانش‌آموز</h3><p class="m">نام کاربری و رمز را مدیر مدرسه به شما داده است.</p>${T.login ? `<p class="dn">${T.login}</p>` : ''}<div class="tb" style="flex-direction:column;align-items:stretch"><input id="lu" dir="ltr" placeholder="نام کاربری" autocapitalize="off"><input id="lp" dir="ltr" type="password" placeholder="رمز" onkeydown="if(event.key==='Enter')login()"><button class="btn p" onclick="login()" ${T.busy ? 'disabled' : ''}>${T.busy ? '…' : 'ورود'}</button></div></div>`;
 }
 const days = () => T.cal.flatMap((r: any) => r.data.days);
-// برنامه‌ی ساعتی وارد نشده باشد، همه‌ی ساعت‌ها «—» هستند؛ آن‌وقت نمای روزمحور نشان می‌دهیم
-const noTT = (d: any) => d.cells.every((x: any) => x.s === '—');
-const gxOf = (d: any) => (d.gx != null ? d.gx : d.cells.some((x: any) => x.t === 'g'));
-const extras = (D: any) => (D.f?.length ? `<div class="c" style="margin-top:10px">🎓 <b>معافیت معلم:</b> ${D.f.map((x: string) => `<span class="tag xf">${esc(x)}</span>`).join('')} <span class="m">در هر جلسه‌ی این درس‌ها</span></div>` : '') + (D.p?.length ? `<div class="c" style="margin-top:10px">🚀 <b>معافیت پیشرفت این هفته:</b> ${D.p.map((x: any) => `<span class="tag xp">یک جلسه از ${esc(x.s)}</span>`).join('')}</div>` : '');
 function dayCard(d: any, lab: string) {
-  const c = GC[GL.indexOf(d.L)], ex = d.cells.filter((x: any) => x.t).length, nt = noTT(d);
-  const msg = nt ? (gxOf(d) ? '🎉 معافی (کل روز)' : 'حضور در کلاس') : ex ? `${n(ex)} از ${n(d.cells.length)} ساعت معافی` : 'همه‌ی ساعت‌ها حضور';
-  return `<div class="c hc" style="--gc:${c};cursor:default"><div class="hl">${d.L}</div><div style="flex:1"><b>${lab} — ${DAYN[d.d]} ${jdate(d.date)}</b><div class="m">${msg}</div>${nt ? '' : `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">${d.cells.map((x: any) => `<span class="tag ${x.t ? 'x' + x.t : ''}" style="padding:2px 8px">${esc(x.s)}${x.t ? ' · ' + STN[x.t].replace('معاف ', '') : ''}</span>`).join('')}</div>`}</div></div>`;
+  const c = GC[GL.indexOf(d.L)], ex = d.cells.filter((x: any) => x.t).length;
+  return `<div class="c hc" style="--gc:${c};cursor:default"><div class="hl">${d.L}</div><div style="flex:1"><b>${lab} — ${DAYN[d.d]} ${jdate(d.date)}</b><div class="m">${ex ? `${n(ex)} از ${n(d.cells.length)} ساعت معافی` : 'همه‌ی ساعت‌ها حضور'}</div><div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">${d.cells.map((x: any) => `<span class="tag ${x.t ? 'x' + x.t : ''}" style="padding:2px 8px">${esc(x.s)}${x.t ? ' · ' + STN[x.t].replace('معاف ', '') : ''}</span>`).join('')}</div></div></div>`;
 }
 function home() {
   const iso = todayIso(), ds = days(), td = ds.find((d: any) => d.date === iso), nx = ds.find((d: any) => d.date > iso);
   const insCard = (ins: string) => { const ex = T.exams.filter((e: any) => e.inst === ins), l = ex[ex.length - 1], p = ex[ex.length - 2]; if (!l) return ''; const d = p ? l.level - p.level : null;
     return `<div class="c k" onclick="T.xi='${ins}';go('exm')" style="cursor:pointer"><span>${ins}</span><b>${n(l.level)}</b><span>تراز ${d != null ? `<span class="${d >= 0 ? 'up' : 'dn'}">${d >= 0 ? '▲' : '▼'} ${n(Math.abs(d))}</span>` : ''} · رتبه ${n(l.rank)}</span></div>`; };
   const sl = T.sch[0];
+  const pa = pendingAbs()[0], rp = repTodo();
   return `<div class="homehero"><div><small>خوش آمدی 👋</small><h2>سلام ${esc(T.me.name)}</h2></div></div>
+  ${pa ? `<div class="ann" style="--ac2:#ef4444" onclick="go('abs')"><div class="ai">🚫</div><div class="ab"><div><b>در ${jdate(pa.day, { weekday: 'long', day: 'numeric', month: 'long' })} غایب ثبت شده‌اید. تا ساعت ${hhmm(pa.deadline)} (${left(pa.deadline)} دیگر) فرصت دارید دلیلش را بنویسید.</b></div></div></div>` : ''}
+  ${rp ? `<div class="ann" style="--ac2:#6366f1" onclick="go('rat')"><div class="ai">📋</div><div class="ab"><div><b>حضور و غیاب امروز: ${n(rp)} زنگ هنوز ثبت نشده است.</b></div></div></div>` : ''}
   ${upcoming()[0] ? (() => { const c = upcoming()[0]; return `<div class="ann" style="--ac2:#10b981" onclick="go('con')"><div class="ai">🗓️</div><div class="ab"><div><b>وقت مشاوره‌ی شما (${rel(c.slot_date)}): ${jdate(c.slot_date, { weekday: 'long', day: 'numeric', month: 'long' })} — ساعت ${ftime(c.slot_time)}</b></div>${c.place ? `<span class="tag">📍 ${esc(c.place)}</span>` : ''}${c.note ? `<p>${esc(c.note)}</p>` : ''}</div></div>`; })() : ''}
   ${T.ann.length ? `<div style="margin-bottom:6px">${T.ann.slice(0, 2).map((a: any) => annHtml(a)).join('')}${T.ann.length > 2 ? `<p class="m" style="margin:0 0 10px"><a href="#" onclick="go('ann');return false" style="color:var(--ac)">دیدن همه‌ی ${T.ann.length.toLocaleString('fa-IR')} اطلاعیه ←</a></p>` : ''}</div>` : ''}
   ${td ? dayCard(td, 'امروز') : nx ? `<div class="c m" style="margin-bottom:10px">امروز مدرسه نیست.</div>` : `<div class="c m">تقویم معافیت هنوز منتشر نشده است.</div>`}
@@ -96,6 +96,81 @@ function home() {
   <div class="g" style="margin-top:10px">${insCard('ماز')}${insCard('قلم‌چی')}${sl ? `<div class="c k" onclick="T.xi='مدرسه';go('exm')" style="cursor:pointer"><span>آخرین آزمون مدرسه</span><b style="font-size:17px">${esc(sl.title)}</b><span>${esc(sl.date)}</span></div>` : ''}${!T.exams.length && !sl ? `<div class="c m">هنوز نتیجه‌ای ثبت نشده.</div>` : ''}
   ${T.pend ? `<div class="c k"><b>${n(T.pend)}</b><span>کارنامه‌ی ارسال‌شده، منتظر بررسی مدیر</span></div>` : ''}</div>
   <div class="tb" style="margin-top:12px"><button class="btn p" onclick="go('send')">📄 ارسال کارنامه‌ی جدید</button></div>`;
+}
+/* ---------- حضور و غیاب ---------- */
+const hhmm = (ts: string) => new Date(ts).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tehran' });
+const absMissing = (e: any) => /attendance|class_attendance|save_attendance|submit_absence/i.test(e?.message || '') && /not exist|find|schema|could not/i.test(e?.message || '');
+const left = (ts: string) => { const m = Math.max(0, Math.round((new Date(ts).getTime() - Date.now()) / 60000)), h = Math.floor(m / 60), r = m % 60; return h ? `${n(h)} ساعت${r ? ' و ' + n(r) + ' دقیقه' : ''}` : `${n(r)} دقیقه`; };
+// غیبت‌های خودِ دانش‌آموز به تفکیک روز
+function absGroups() {
+  const m: any = {}; (T.ab || []).forEach((r: any) => { (m[r.day] = m[r.day] || []).push(r); });
+  return Object.keys(m).sort().reverse().map((day) => { const rs = m[day].sort((a: any, b: any) => a.period - b.period), dl = rs.reduce((x: string, r: any) => (r.deadline < x ? r.deadline : x), rs[0].deadline), rr = rs.find((r: any) => r.reason);
+    return { day, rs, deadline: dl, live: new Date(dl).getTime() > Date.now(), reason: rr?.reason || '', reasonAt: rr?.reason_at, hasAbs: rs.some((r: any) => r.status === 'absent') }; });
+}
+const pendingAbs = () => absGroups().filter((g: any) => g.live && !g.reason);
+function abs() {
+  const G = absGroups(), A = T.ab || [], days = G.filter((g: any) => g.hasAbs).length, per = A.filter((r: any) => r.status === 'absent').length, late = A.filter((r: any) => r.status === 'late').length;
+  const kp = (b: number, t: string, c = '') => `<div class="c k"><b class="${c}">${n(b)}</b><span>${t}</span></div>`;
+  const card = (g: any) => { const ps = g.rs.map((r: any) => `${r.status === 'late' ? '⏰ تأخیر' : '❌ غیبت'} زنگ ${n(r.period)}`).join(' · '), when = jdate(g.day, { weekday: 'long', day: 'numeric', month: 'long' });
+    if (g.live) return `<div class="c" style="border-inline-start:5px solid ${g.reason ? '#f59e0b' : '#ef4444'};margin-bottom:10px"><b>${when}</b><div class="m">${ps}</div>
+      <p style="margin:8px 0 4px">${g.reason ? 'دلیلی که نوشته‌اید (تا پایان مهلت قابل ویرایش است):' : `⏳ <b>تا ساعت ${hhmm(g.deadline)} (${left(g.deadline)} دیگر)</b> فرصت دارید دلیل غیبتتان را بنویسید. مدیر دقیقاً همین متن را می‌بیند.`}</p>
+      <textarea id="ar_${g.day}" maxlength="600" placeholder="دلیل غیبت را با زبان خودتان بنویسید…" style="width:100%;min-height:84px">${esc(g.reason)}</textarea>
+      <div class="tb" style="margin:8px 0 0"><button class="btn p" onclick="absSend('${g.day}')">${g.reason ? 'به‌روزرسانی دلیل' : 'ثبت دلیل غیبت'}</button></div></div>`;
+    return `<div class="c" style="margin-bottom:8px"><div class="tb" style="margin:0"><b>${when}</b><span class="m">${ps}</span></div>${g.reason ? `<div class="m" style="margin-top:6px">🗣 «${esc(g.reason)}»</div>` : `<div class="m" style="margin-top:6px">⛔ مهلت ثبت دلیل تمام شد.</div>`}</div>`; };
+  const pend = G.filter((g: any) => g.live && !g.reason);
+  return `<div class="g" style="margin-bottom:10px">${kp(days, 'روز غیبت', days ? 'dn' : '')}${kp(per, 'زنگ غیبت')}${kp(late, 'تأخیر')}</div>
+  ${pend.length ? `<div class="c" style="border-inline-start:5px solid #ef4444;margin-bottom:10px">🚨 <b>${n(pend.length)} غیبت منتظر دلیل شماست.</b> بعد از پایان مهلت دیگر نمی‌توانید دلیلی بنویسید.</div>` : ''}
+  ${G.length ? G.map(card).join('') : `<div class="c m" style="text-align:center">🎉 تا حالا هیچ غیبتی نداشته‌اید.</div>`}
+  <p class="m">غیبت‌ها را نماینده‌ی کلاس ثبت می‌کند. اگر اشتباه ثبت شده، همین‌جا در دلیل بنویسید.</p>`;
+}
+async function absSend(day: string) {
+  const t = ($('#ar_' + day).value || '').trim(), r = await sb.rpc('submit_absence_reason', { p_day: day, p_reason: t });
+  if (r.error) { alert(r.error.message); return; }
+  const ab = await sb.from('attendance').select('*').order('day', { ascending: false }); T.ab = ab.data || []; toast('دلیل غیبت ثبت شد ✓'); draw();
+}
+setInterval(() => { const ae = document.activeElement as HTMLElement | null; if (T.me && T.p === 'abs' && !(ae && ae.tagName === 'TEXTAREA')) draw(); }, 30000);
+
+/* ----- نماینده: ثبت حضور و غیاب ----- */
+async function loadAtt() {
+  const r = await sb.rpc('class_attendance');
+  if (r.error) { T.atErr = absMissing(r.error) ? 'فایل supabase/update-9.sql روی سرور اجرا نشده است.' : r.error.message; T.at = null; return; }
+  T.atErr = ''; T.at = r.data; T.ae = {}; T.ab0 = {};
+  (r.data?.rows || []).forEach((x: any) => { const k = x.student_id + '|' + x.period, v = x.status === 'late' ? 'l' : 'a'; T.ae[k] = v; T.ab0[k] = v; });
+}
+const atRows = () => T.rc.map((r: any) => ({ id: r.student_id, name: r.name, day: r.data.days.find((d: any) => d.date === T.at?.today) })).filter((x: any) => x.day).sort((a: any, b: any) => a.name.localeCompare(b.name, 'fa'));
+const atDirty = (p: number) => { for (const k of new Set([...Object.keys(T.ae), ...Object.keys(T.ab0)])) if (k.endsWith('|' + p) && (T.ae[k] || '') !== (T.ab0[k] || '')) return true; return false; };
+function repTodo() { if (!T.me?.is_rep || !T.at) return 0; const rs = atRows(); if (!rs.length) return 0; return rs[0].day.cells.length - (T.at.done || []).length; }
+function rat() {
+  if (!T.me?.is_rep) return `<div class="c m">این بخش فقط برای نماینده‌ی کلاس است.</div>`;
+  if (T.atErr) return `<div class="c dn">${esc(T.atErr)}</div>`;
+  if (!T.at) return `<div class="c m">در حال دریافت…</div>`;
+  return `<div id="atbox">${ratBody()}</div>`;
+}
+function ratBody() {
+  const rows = atRows(), t = T.at.today, head = `<div class="c" style="margin-bottom:10px"><b>حضور و غیاب ${esc(T.at.cls)}</b> — ${jdate(t, { weekday: 'long', day: 'numeric', month: 'long' })}</div>`;
+  if (!rows.length) return head + `<div class="c m">امروز روز مدرسه نیست یا تقویم معافیت هنوز منتشر نشده است.</div>`;
+  const per = rows[0].day.cells.length, L = rows[0].day.L, done: number[] = T.at.done || [], ps = Array.from({ length: per }, (_, i) => i + 1);
+  const absS = rows.filter((r: any) => ps.some((p) => T.ae[r.id + '|' + p] === 'a')).length, lateS = rows.filter((r: any) => ps.some((p) => T.ae[r.id + '|' + p] === 'l') && !ps.some((p) => T.ae[r.id + '|' + p] === 'a')).length, exS = rows.filter((r: any) => r.day.cells.some((c: any) => c.t)).length;
+  const dirty = ps.filter(atDirty), ex: any = { g: '👥', f: '🎓', p: '🚀' };
+  const th = ps.map((p) => { const d = done.includes(p), dt = atDirty(p);
+    return `<th style="text-align:center;min-width:70px">${n(p)}<br><span class="m">${esc(rows[0].day.cells[p - 1].s)}</span><br>${dt ? `<button class="btn p" style="padding:2px 8px" onclick="atSave([${p}])">ثبت</button>` : d ? '<span class="tag" style="margin:0;background:#10b981;color:#fff">✅ ثبت شد</span>' : `<button class="btn" style="padding:2px 8px" onclick="atSave([${p}])">ثبت زنگ</button>`}</th>`; }).join('');
+  const body = rows.map((r: any) => `<tr style="cursor:default"><td style="white-space:nowrap"><a href="#" onclick="atDay('${r.id}');return false" title="غایب در کل روز">${esc(r.name)}</a></td>${ps.map((p) => { const c = r.day.cells[p - 1], v = T.ae[r.id + '|' + p];
+    if (c.t) return `<td style="text-align:center;background:var(--card2)" title="${esc(STN[c.t])}">${ex[c.t]}</td>`;
+    return `<td onclick="atTap('${r.id}',${p})" style="text-align:center;cursor:pointer;${v === 'a' ? 'background:#ef444433' : v === 'l' ? 'background:#f59e0b33' : ''}">${v === 'a' ? '❌' : v === 'l' ? '⏰' : done.includes(p) ? '<span class="up">✓</span>' : '<span class="m">·</span>'}</td>`; }).join('')}</tr>`).join('');
+  return `${head}<div class="g" style="margin-bottom:10px"><div class="c k"><b class="${absS ? 'dn' : ''}">${n(absS)}</b><span>غایب</span></div><div class="c k"><b>${n(lateS)}</b><span>متأخر</span></div><div class="c k"><b>${n(exS)}</b><span>معاف (خودکار)</span></div><div class="c k"><b>${n(per - done.length)}</b><span>زنگ ثبت‌نشده</span></div></div>
+  <div class="c tw"><table><thead><tr><th>${n(rows.length)} نفر · گروه ${L}</th>${th}</tr></thead><tbody>${body}</tbody></table></div>
+  <div class="tb" style="margin-top:10px"><button class="btn p" ${dirty.length && !T.atBusy ? '' : 'disabled'} onclick="atSave([${dirty.join(',')}])">${T.atBusy ? '⏳ در حال ثبت…' : dirty.length ? `ثبت ${n(dirty.length)} زنگ تغییرکرده` : 'همه‌ی تغییرها ثبت شده'}</button></div>
+  <p class="m" style="margin-top:10px">روی هر خانه بزنید: ✓ حاضر ← ❌ غایب ← ⏰ تأخیر. روی اسم بزنید تا برای کل روز غایب شود. 👥🎓🚀 یعنی معافیت دارد (غیبت حساب نمی‌شود). بعد از هر زنگ، دکمه‌ی «ثبت» همان زنگ را بزنید؛ زنگی که ثبت نشود برای مدیر «ثبت‌نشده» می‌ماند.</p>`;
+}
+const atRefresh = () => { const b = $('#atbox'); if (b) b.innerHTML = ratBody(); };
+function atTap(sid: string, p: number) { const k = sid + '|' + p, c = T.ae[k]; if (!c) T.ae[k] = 'a'; else if (c === 'a') T.ae[k] = 'l'; else delete T.ae[k]; atRefresh(); }
+function atDay(sid: string) { const r = atRows().find((x: any) => x.id === sid); if (!r) return; const free = r.day.cells.map((c: any, i: number) => (c.t ? 0 : i + 1)).filter(Boolean) as number[], all = free.every((p) => T.ae[sid + '|' + p] === 'a'); free.forEach((p) => { if (all) delete T.ae[sid + '|' + p]; else T.ae[sid + '|' + p] = 'a'; }); atRefresh(); }
+async function atSave(ps: number[]) {
+  if (!ps.length || T.atBusy) return; T.atBusy = true; atRefresh();
+  const rows = Object.keys(T.ae).filter((k) => ps.includes(+k.split('|')[1])).map((k) => { const [sid, p] = k.split('|'); return { student_id: sid, period: +p, status: T.ae[k] === 'l' ? 'late' : 'absent' }; });
+  const r = await sb.rpc('save_attendance', { p_periods: ps, p_rows: rows }); T.atBusy = false;
+  if (r.error) { alert(r.error.message); atRefresh(); return; }
+  await loadAtt(); atRefresh(); toast(`حضور و غیاب ${ps.map(n).join('، ')} ثبت شد ✓` + (r.data?.skipped ? ` (${n(r.data.skipped)} نفر معافیت داشتند)` : ''));
 }
 /* ---------- وقت مشاوره ---------- */
 const rel = (iso: string) => { const d = daysLeft(iso); return d === 0 ? 'امروز' : d === 1 ? 'فردا' : `${d.toLocaleString('fa-IR')} روز دیگر`; };
@@ -128,10 +203,9 @@ function ann() { return T.ann.length ? T.ann.map((a: any) => annHtml(a)).join(''
 function cal() {
   const r = T.cal[T.wi]; if (!r) return `<div class="c m">تقویم هنوز منتشر نشده است.</div>`;
   const D = r.data, last = T.cal.length - 1;
-  const nt = D.days.every(noTT);
-  let g = nt ? `<div class="g2">${D.days.map((d: any) => { const c = GC[GL.indexOf(d.L)]; return `<div class="c" style="border-top:4px solid ${c}"><div class="tb" style="margin-bottom:6px"><b>${DAYN[d.d]}</b><span class="m">${jdate(d.date)}</span><span style="flex:1"></span><span class="tag" style="background:${c};color:#fff;border-color:${c}">گروه ${d.L}</span></div>${gxOf(d) ? '<b class="up">🎉 معاف (کل روز)</b>' : '<span class="m">حضور در کلاس</span>'}</div>`; }).join('')}</div>` : `<div class="cal"><div></div>${D.days.map((d: any) => `<div class="ch" style="--gc:${GC[GL.indexOf(d.L)]}"><b>${DAYN[d.d]}</b><span>${jdate(d.date)}</span><i>${d.L}</i></div>`).join('')}`;
-  if (!nt) for (let p = 0; p < D.per; p++) { g += `<div class="cp">${n(p + 1)}</div>`; D.days.forEach((d: any) => { const x = d.cells[p]; g += `<div class="cell ${x.t ? 'x' + x.t : ''}" style="--gc:${GC[GL.indexOf(d.L)]}"><b>${esc(x.s)}</b><em>${x.t ? STN[x.t] : 'حضور'}</em></div>`; }); }
-  return `<div class="tb"><button class="btn" ${T.wi >= last ? 'disabled' : ''} onclick="T.wi++;draw()">◀</button><b>هفته‌ی ${jdate(D.days[0].date)} تا ${jdate(D.days[3].date)}</b><button class="btn" ${T.wi <= 0 ? 'disabled' : ''} onclick="T.wi--;draw()">▶</button></div>${g}${extras(D)}
+  let g = `<div class="cal"><div></div>${D.days.map((d: any) => `<div class="ch" style="--gc:${GC[GL.indexOf(d.L)]}"><b>${DAYN[d.d]}</b><span>${jdate(d.date)}</span><i>${d.L}</i></div>`).join('')}`;
+  for (let p = 0; p < D.per; p++) { g += `<div class="cp">${n(p + 1)}</div>`; D.days.forEach((d: any) => { const x = d.cells[p]; g += `<div class="cell ${x.t ? 'x' + x.t : ''}" style="--gc:${GC[GL.indexOf(d.L)]}"><b>${esc(x.s)}</b><em>${x.t ? STN[x.t] : 'حضور'}</em></div>`; }); }
+  return `<div class="tb"><button class="btn" ${T.wi >= last ? 'disabled' : ''} onclick="T.wi++;draw()">◀</button><b>هفته‌ی ${jdate(D.days[0].date)} تا ${jdate(D.days[3].date)}</b><button class="btn" ${T.wi <= 0 ? 'disabled' : ''} onclick="T.wi--;draw()">▶</button></div>${g}
   <p class="m" style="margin-top:10px"><span class="tag xg">معاف (گروه)</span> <span class="tag xf">معاف (معلم)</span> <span class="tag xp">معاف (پیشرفت)</span></p>`;
 }
 
@@ -145,19 +219,17 @@ function rcal() {
   const days0 = rows[0].data.days, di = Math.min(T.rd, days0.length - 1), d0 = days0[di];
   const tabs = `<div class="seg">${days0.map((d: any, i: number) => `<button class="${i === di ? 'on' : ''}" onclick="T.rd=${i};draw()">${DAYN[d.d]} ${jdate(d.date)}</button>`).join('')}</div>`;
   const c = GC[GL.indexOf(d0.L)], per = d0.cells.length;
-  const nt = rows.every((r: any) => r.data.days.every(noTT));
-  const head = nt ? `<tr><th>دانش‌آموز</th><th style="text-align:center">این روز</th><th>معافیت‌های درسی این هفته</th></tr>` : `<tr><th>دانش‌آموز</th>${d0.cells.map((x: any, p: number) => `<th style="text-align:center">${n(p + 1)}<br><span class="m">${esc(x.s)}</span></th>`).join('')}<th style="text-align:center">جمع</th></tr>`;
+  const head = `<tr><th>دانش‌آموز</th>${d0.cells.map((x: any, p: number) => `<th style="text-align:center">${n(p + 1)}<br><span class="m">${esc(x.s)}</span></th>`).join('')}<th style="text-align:center">جمع</th></tr>`;
   let tot = 0;
   const body = rows.map((r: any) => {
     const d = r.data.days[di]; if (!d) return '';
-    const ex = d.cells.filter((x: any) => x.t).length; tot += nt ? (gxOf(d) ? 1 : 0) : ex;
-    if (nt) return `<tr style="cursor:default"><td>${esc(r.name)}${r.student_id === T.me.id ? ' <span class="tag">شما</span>' : ''}</td><td style="text-align:center">${gxOf(d) ? '<span class="tag xg" style="margin:0">گروه</span>' : '<span class="m">—</span>'}</td><td style="white-space:normal">${(r.data.f || []).map((x: string) => `<span class="tag xf">${esc(x)}</span>`).join('')}${(r.data.p || []).map((x: any) => `<span class="tag xp">${esc(x.s)}</span>`).join('')}</td></tr>`;
+    const ex = d.cells.filter((x: any) => x.t).length; tot += ex;
     return `<tr style="cursor:default"><td>${esc(r.name)}${r.student_id === T.me.id ? ' <span class="tag">شما</span>' : ''}</td>${d.cells.map((x: any) => `<td style="text-align:center">${x.t ? `<span class="tag x${x.t}" style="margin:0">${STN[x.t].replace('معاف ', '')}</span>` : '<span class="m">—</span>'}</td>`).join('')}<td style="text-align:center">${ex ? `<b>${n(ex)}</b>` : '<span class="m">—</span>'}</td></tr>`;
   }).join('');
   const last = weeks.length - 1, wi = Math.min(T.rw, last), D0 = rows[0].data;
   return `<div class="c" style="--gc:${c};margin-bottom:10px"><b>تقویم معافیت کلاس ${esc(T.me.cls)}</b><div class="m">نمایش وضعیت معافیت ${n(rows.length)} دانش‌آموز کلاس شما، فقط برای اطلاع نماینده.</div></div>
   <div class="tb"><button class="btn" ${wi >= last ? 'disabled' : ''} onclick="T.rw++;T.rd=0;draw()">◀</button><b>هفته‌ی ${jdate(D0.days[0].date)} تا ${jdate(D0.days[D0.days.length - 1].date)}</b><button class="btn" ${wi <= 0 ? 'disabled' : ''} onclick="T.rw--;T.rd=0;draw()">▶</button></div>
-  ${tabs}<p class="m">گروه ${d0.L} · ${nt ? `${n(tot)} نفر معاف در این روز` : `${n(tot)} ساعت معافیت در این روز`}</p>
+  ${tabs}<p class="m">گروه ${d0.L} · ${n(tot)} ساعت معافیت در این روز</p>
   <div class="c tw"><table><thead>${head}</thead><tbody>${body}</tbody></table></div>
   <p class="m" style="margin-top:10px"><span class="tag xg">گروه</span> <span class="tag xf">معلم</span> <span class="tag xp">پیشرفت</span></p>`;
 }
@@ -224,5 +296,5 @@ async function submitIt() {
 
 initUi();
 initPwa();
-Object.assign(W, { conSend, conCancel, T, draw, go, login, logout, pick, submitIt });
+Object.assign(W, { conSend, conCancel, T, draw, go, login, logout, pick, submitIt, absSend, atTap, atDay, atSave });
 boot();
