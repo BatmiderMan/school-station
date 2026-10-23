@@ -22,7 +22,7 @@ export function mkExams(A: any) {
   const pend = () => A.SV.pend();
   // شمارش کارنامه‌های منتظر روی سرور؛ حداکثر هر ۳۰ ثانیه یک‌بار (مگر اجباری) و فقط اگر عدد عوض شد دوباره رسم می‌شود
   let lastRef = 0;
-  const refresh = (force: boolean) => { if (!force && Date.now() - lastRef < 30000) return; lastRef = Date.now(); const b = pend(); A.SV.refreshPend().then(() => { if (pend() !== b && A.U.p === 'exm') draw(); }); };
+  const refresh = (force: boolean) => { if (!force && Date.now() - lastRef < 30000) return; lastRef = Date.now(); const b = pend(); A.SV.refreshPend().then(() => { if (pend() !== b && A.U.p === 'exm') (A.bg || A.draw)(); }); };
 
   const defaultTab = () => (pend() || A.FILES().some((f: any) => f.st === 'ok' && !f.done) ? 'in' : 'ex');
   const seg = (k: string, o: string[][], cur: string) => `<div class="seg">${o.map(([v, t]) => `<button class="${cur === v ? 'on' : ''}" onclick="X_('${k}','${v}')">${t}</button>`).join('')}</div>`;

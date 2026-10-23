@@ -4,6 +4,7 @@ import { ic, initUi, annHtml, daysLeft, toast } from './ui';
 import { sb, cfgOk } from './supa';
 import { initPwa } from './pwa';
 import { importReport, ExamSettings } from './scan';
+import { mkAttGrid } from './attgrid';
 
 const $ = (s: string) => document.querySelector(s) as any;
 const esc = (s: any) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' } as any)[c]);
@@ -120,7 +121,6 @@ async function loadAtt() {
   (r.data?.rows || []).forEach((x: any) => { const k = x.student_id + '|' + x.period, v = x.status === 'late' ? 'l' : 'a'; T.ae[k] = v; T.ab0[k] = v; });
 }
 const atRows = () => T.rc.map((r: any) => ({ id: r.student_id, name: r.name, day: r.data.days.find((d: any) => d.date === T.at?.today) })).filter((x: any) => x.day).sort((a: any, b: any) => a.name.localeCompare(b.name, 'fa'));
-const atDirty = (p: number) => { for (const k of new Set([...Object.keys(T.ae), ...Object.keys(T.ab0)])) if (k.endsWith('|' + p) && (T.ae[k] || '') !== (T.ab0[k] || '')) return true; return false; };
 function repTodo() { if (!T.me?.is_rep || !T.at) return 0; const rs = atRows(); if (!rs.length) return 0; return rs[0].day.cells.length - (T.at.done || []).length; }
 function rat() {
   if (!T.me?.is_rep) return `<div class="c m">این بخش فقط برای نماینده‌ی کلاس است.</div>`;
@@ -128,45 +128,23 @@ function rat() {
   if (!T.at) return `<div class="c m">در حال دریافت…</div>`;
   return `<div id="atbox">${ratBody()}</div>`;
 }
-const ini = (nm: string) => { const w = nm.trim().split(/[\s\u200c]+/).filter(Boolean); return w.length > 1 ? w[0][0] + '\u200c' + w[w.length - 1][0] : (w[0] || '').slice(0, 2); };
-function ratBody() {
+function repTop() {
   const rows = atRows(), t = T.at.today, dstr = jdate(t, { weekday: 'long', day: 'numeric', month: 'long' }), test = t !== new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Tehran' });
-  if (!rows.length) return `<div class="athero"><div style="flex:1"><small>حضور و غیاب</small><h3>${esc(T.at.cls)}</h3><small>${dstr}</small></div></div><div class="c m">امروز روز مدرسه نیست یا تقویم معافیت هنوز منتشر نشده است.</div>`;
-  const per = rows[0].day.cells.length, L = rows[0].day.L, done: number[] = T.at.done || [], ps = Array.from({ length: per }, (_, i) => i + 1);
-  if (!T.ap || T.ap > per) T.ap = ps.find((p) => !done.includes(p)) || 1;
-  const ap: number = T.ap, dirty = ps.filter(atDirty), C = 2 * Math.PI * 26, frac = done.length / per;
-  const stOf = (r: any) => { const c = r.day.cells[ap - 1]; if (c.t) return 'x'; const v = T.ae[r.id + '|' + ap]; return v === 'a' ? 'a' : v === 'l' ? 'l' : 'p'; };
-  const cnt: any = { a: 0, l: 0, x: 0, p: 0 }; rows.forEach((r: any) => { cnt[stOf(r)]++; });
-  const subj = (p: number) => { const s0 = rows[0].day.cells[p - 1].s; return s0 === '—' ? '' : esc(s0); };
-  const hero = `<div class="athero"><div class="atring"><svg width="64" height="64" viewBox="0 0 64 64"><circle cx="32" cy="32" r="26" fill="none" stroke="#ffffff44" stroke-width="6"/><circle cx="32" cy="32" r="26" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - frac)}" transform="rotate(-90 32 32)"/></svg><b>${n(done.length)}/${n(per)}</b></div>
+  const per = rows[0].day.cells.length, L = rows[0].day.L, done: number[] = T.at.done || [], C = 2 * Math.PI * 26, frac = done.length / per;
+  return `<div class="athero"><div class="atring"><svg width="64" height="64" viewBox="0 0 64 64"><circle cx="32" cy="32" r="26" fill="none" stroke="#ffffff44" stroke-width="6"/><circle cx="32" cy="32" r="26" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - frac)}" transform="rotate(-90 32 32)"/></svg><b>${n(done.length)}/${n(per)}</b></div>
     <div style="flex:1"><small>حضور و غیاب امروز</small><h3>${esc(T.at.cls)}</h3><small>${dstr} · گروه ${L}</small></div></div>${test ? '<div class="c dn" style="margin-bottom:10px">🧪 حالت آزمایشی: تاریخ حضور و غیاب روی روز بالا تنظیم شده است.</div>' : ''}`;
-  const chips = `<div class="atps">${ps.map((p) => { const d = done.includes(p), dt = atDirty(p); return `<button class="atp ${p === ap ? 'on' : ''} ${dt ? 'dt' : d ? 'ok' : ''}" onclick="atPick(${p})"><span class="no">${dt ? '●' : d ? '✓' : n(p)}</span><b>زنگ ${n(p)}</b><small>${subj(p) || (dt ? 'ثبت‌نشده' : d ? 'ثبت شد' : 'منتظر')}</small></button>`; }).join('')}</div>`;
-  const pills = `<div class="atpills"><span class="atpill" style="color:#16a34a">✓ ${n(cnt.p)} حاضر</span><span class="atpill" style="color:#dc2626">❌ ${n(cnt.a)} غایب</span><span class="atpill" style="color:#d97706">⏰ ${n(cnt.l)} تأخیر</span><span class="atpill" style="color:#7c3aed">🔒 ${n(cnt.x)} معاف</span></div>`;
-  const tools = `<div class="tb" style="margin:0 0 10px"><button class="btn" onclick="atAllP(${ap})">✓ همه حاضر</button>${ap > 1 ? `<button class="btn" onclick="atCopy(${ap})">⤵ غایب‌های زنگ ${n(ap - 1)} را بیاور</button>` : ''}</div>`;
-  const exL: any = { g: 'گروه', f: 'معلم', p: 'پیشرفت' };
-  const cards = rows.map((r: any) => { const c = r.day.cells[ap - 1], s = stOf(r), other = ps.filter((q) => q !== ap && T.ae[r.id + '|' + q] === 'a').length;
-    const lab = s === 'x' ? `🔒 معاف · ${exL[c.t]}` : s === 'a' ? '❌ غایب' : s === 'l' ? '⏰ تأخیر' : other ? `حاضر · در ${n(other)} زنگ دیگر غایب` : '✓ حاضر';
-    return `<div class="atc ${s}" ${s === 'x' ? '' : `onclick="atTap('${r.id}',${ap})"`}><div class="av">${s === 'x' ? '🔒' : s === 'a' ? '✕' : s === 'l' ? '⏰' : esc(ini(r.name))}</div><div style="min-width:0"><div class="nm">${esc(r.name)}</div><div class="st">${lab}</div></div>${s === 'x' ? '' : `<button class="dd" onclick="event.stopPropagation();atDay('${r.id}')" title="غایب در کل روز">کل روز</button>`}</div>`; }).join('');
-  const isDone = done.includes(ap), dtAp = atDirty(ap);
-  const bar = `<div class="atbar">${dirty.length > 1 ? `<button class="btn" ${T.atBusy ? 'disabled' : ''} onclick="atSave([${dirty.join(',')}])">ثبت همه (${n(dirty.length)} زنگ)</button>` : ''}<button class="btn p" ${T.atBusy ? 'disabled' : ''} onclick="atSave([${ap}])">${T.atBusy ? '⏳ در حال ثبت…' : dtAp ? `ثبت زنگ ${n(ap)}${cnt.a ? ` · ${n(cnt.a)} غایب` : ''}` : isDone ? `✅ زنگ ${n(ap)} ثبت شده` : `ثبت زنگ ${n(ap)} · ${cnt.a ? n(cnt.a) + ' غایب' : 'همه حاضرند'}`}</button></div>`;
-  const map = `<details class="c" style="margin-top:14px"><summary style="cursor:pointer"><b>نمای کلی روز</b> <span class="m">همه‌ی زنگ‌ها و دانش‌آموزان</span></summary><div class="tw" style="margin-top:8px"><table class="atmap"><thead><tr><th></th>${ps.map((p) => `<th style="text-align:center">${n(p)}</th>`).join('')}<th style="text-align:center">غیبت</th></tr></thead><tbody>${rows.map((r: any) => { const ab = ps.filter((p) => T.ae[r.id + '|' + p] === 'a').length;
-    return `<tr style="cursor:default"><td style="white-space:nowrap">${esc(r.name)}</td>${ps.map((p) => { const c = r.day.cells[p - 1], v = T.ae[r.id + '|' + p], k = c.t ? 'x' : v === 'a' ? 'a' : v === 'l' ? 'l' : done.includes(p) ? 'ok' : 'n'; return `<td style="text-align:center"><span class="atdot ${k}" onclick="atPick(${p})"></span></td>`; }).join('')}<td style="text-align:center">${ab ? `<b class="dn">${n(ab)}</b>` : '<span class="m">—</span>'}</td></tr>`; }).join('')}</tbody></table></div>
-    <p class="m" style="margin:8px 0 0"><span class="atdot ok"></span> حاضر (ثبت‌شده) · <span class="atdot a"></span> غایب · <span class="atdot l"></span> تأخیر · <span class="atdot x"></span> معاف · <span class="atdot n"></span> هنوز ثبت نشده</p></details>`;
-  return `${hero}${chips}${pills}${tools}<div class="atgrid">${cards}</div>${bar}${map}
-  <p class="m" style="margin-top:12px">روی هر دانش‌آموز بزنید: حاضر ← غایب ← تأخیر. «کل روز» او را برای همه‌ی زنگ‌ها غایب می‌کند. 🔒 یعنی در این زنگ معافیت دارد و غیبت حساب نمی‌شود. حتماً بعد از هر زنگ «ثبت» را بزنید؛ زنگ ثبت‌نشده برای مدیر «ثبت نشده» می‌ماند.</p>`;
 }
-const atRefresh = (center?: boolean) => { const b = $('#atbox'); if (!b) return; const sc = $('.atps')?.scrollLeft; b.innerHTML = ratBody(); const ps2 = $('.atps'); if (ps2 && sc != null) ps2.scrollLeft = sc; if (center) $('.atp.on')?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); };
-function atTap(sid: string, p: number) { const k = sid + '|' + p, c = T.ae[k]; if (!c) T.ae[k] = 'a'; else if (c === 'a') T.ae[k] = 'l'; else delete T.ae[k]; atRefresh(); }
-function atDay(sid: string) { const r = atRows().find((x: any) => x.id === sid); if (!r) return; const free = r.day.cells.map((c: any, i: number) => (c.t ? 0 : i + 1)).filter(Boolean) as number[], all = free.every((p) => T.ae[sid + '|' + p] === 'a'); free.forEach((p) => { if (all) delete T.ae[sid + '|' + p]; else T.ae[sid + '|' + p] = 'a'; }); atRefresh(); }
-function atPick(p: number) { T.ap = p; atRefresh(true); }
-function atAllP(p: number) { atRows().forEach((r: any) => { delete T.ae[r.id + '|' + p]; }); atRefresh(); }
-function atCopy(p: number) { atRows().forEach((r: any) => { if (r.day.cells[p - 1].t) return; if (T.ae[r.id + '|' + (p - 1)] === 'a') T.ae[r.id + '|' + p] = 'a'; else delete T.ae[r.id + '|' + p]; }); atRefresh(); }
-async function atSave(ps: number[]) {
-  if (!ps.length || T.atBusy) return; T.atBusy = true; atRefresh();
-  const rows = Object.keys(T.ae).filter((k) => ps.includes(+k.split('|')[1])).map((k) => { const [sid, p] = k.split('|'); return { student_id: sid, period: +p, status: T.ae[k] === 'l' ? 'late' : 'absent' }; });
-  const r = await sb.rpc('save_attendance', { p_periods: ps, p_rows: rows }); T.atBusy = false;
-  if (r.error) { alert(r.error.message); atRefresh(); return; }
-  await loadAtt(); if (ps.length === 1 && ps[0] === T.ap) { const nx = Array.from({ length: (atRows()[0]?.day.cells.length || 0) }, (_, i) => i + 1).find((q) => q > T.ap && !(T.at.done || []).includes(q)); if (nx) T.ap = nx; } atRefresh(true); toast(`حضور و غیاب ${ps.map(n).join('، ')} ثبت شد ✓` + (r.data?.skipped ? ` (${n(r.data.skipped)} نفر معافیت داشتند)` : ''));
+const G = mkAttGrid({
+  id: 'rep', root: () => $('#atbox'), esc, n, toast,
+  rows: () => atRows().map((r: any) => ({ id: r.id, name: r.name, cells: r.day.cells })),
+  done: () => T.at?.done || [], ed: () => T.ae, base: () => T.ab0,
+  top: () => repTop(),
+  save: async (ps, rows) => { const r = await sb.rpc('save_attendance', { p_periods: ps, p_rows: rows }); if (r.error) return r.error.message; await loadAtt(); return null; },
+});
+function ratBody() {
+  const rows = atRows(), t = T.at.today, dstr = jdate(t, { weekday: 'long', day: 'numeric', month: 'long' });
+  if (!rows.length) return `<div class="athero"><div style="flex:1"><small>حضور و غیاب</small><h3>${esc(T.at.cls)}</h3><small>${dstr}</small></div></div><div class="c m">امروز روز مدرسه نیست یا تقویم معافیت هنوز منتشر نشده است.</div>`;
+  return G.html();
 }
 /* ---------- وقت مشاوره ---------- */
 const rel = (iso: string) => { const d = daysLeft(iso); return d === 0 ? 'امروز' : d === 1 ? 'فردا' : `${d.toLocaleString('fa-IR')} روز دیگر`; };
@@ -292,5 +270,5 @@ async function submitIt() {
 
 initUi();
 initPwa();
-Object.assign(W, { conSend, conCancel, T, draw, go, login, logout, pick, submitIt, atTap, atDay, atSave, atPick, atAllP, atCopy });
+Object.assign(W, { conSend, conCancel, T, draw, go, login, logout, pick, submitIt });
 boot();

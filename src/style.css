@@ -256,3 +256,8 @@ details.c>summary::-webkit-details-marker{display:none}
 .exprev small{color:var(--mut);font-size:11px}.exprev b{font-size:18px;color:var(--gc)}
 .explan td,.explan th{padding:6px 8px;vertical-align:middle}.explan tr.sel{background:var(--acs)}
 .explan .seg{justify-content:center}
+
+/* ===== معاف‌ها در حضور و غیاب + حالت معاون ===== */
+.atc.x{border-style:dashed;border-color:#7c3aed88;background:#7c3aed12;cursor:pointer}.atc.x .av{background:#7c3aed2a;color:#7c3aed}.atc.x .st{color:#7c3aed;font-weight:600}
+.atc.xa{border-style:dashed;border-color:#dc2626;background:#dc262612;cursor:pointer}.atc.xa .av{background:#dc2626;color:#fff}.atc.xa .st{color:#dc2626;font-weight:700}
+.exnote{border-inline-start:5px solid #7c3aed;font-size:13px;line-height:1.8}

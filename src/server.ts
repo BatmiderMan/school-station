@@ -26,6 +26,7 @@ export function mkServer(A: any) {
   const S: any = { cons: [], ct: 'new', cform: '', consErr: '', dr: {}, user: null, mgr: null, tab: 'acc', msg: '', busy: false, inbox: [], creds: null };
   const sd = () => (A.D.srv = A.D.srv || { accounts: {}, firstOnly: true });
   const draw = () => A.draw();
+  const bg = () => (A.bg ? A.bg() : A.draw());
   const say = (m: string) => { S.msg = m; S.busy = false; draw(); };
   const $v = (id: string) => (document.getElementById(id) as HTMLInputElement | null)?.value ?? '';
   const stu = (lid: string) => A.D.students.find((s: any) => s.id === lid);
@@ -46,7 +47,7 @@ export function mkServer(A: any) {
   const pend = () => S.inbox.length + (S.sc || 0);
   async function init() {
     S.inbox = (await kvGet('inbox').catch(() => null)) || [];
-    if (cfgOk) { const { data } = await sb.auth.getSession(); S.user = data.session?.user || null; if (S.user) { await chk().catch(() => 0); if (S.mgr) { consLoad().then(draw); repLoad().then(draw); refreshPend().then(draw); autoPub(); } } }
+    if (cfgOk) { const { data } = await sb.auth.getSession(); S.user = data.session?.user || null; if (S.user) { await chk().catch(() => 0); if (S.mgr) { consLoad().then(bg); repLoad().then(bg); refreshPend().then(bg); autoPub(); } } }
     draw();
   }
   async function login() {
@@ -54,7 +55,7 @@ export function mkServer(A: any) {
     S.busy = true; draw();
     const { data, error } = await sb.auth.signInWithPassword({ email, password });
     if (error) { say('ورود ناموفق: ' + error.message); return; }
-    S.user = data.user; await chk().catch(() => 0); if (S.mgr) { consLoad().then(draw); repLoad().then(draw); refreshPend().then(draw); autoPub(); }
+    S.user = data.user; await chk().catch(() => 0); if (S.mgr) { consLoad().then(bg); repLoad().then(bg); refreshPend().then(bg); autoPub(); }
     say(S.mgr ? '' : 'این حساب در جدول managers نیست (مرحله‌ی ۴ راهنما).');
   }
   async function logout() { await sb.auth.signOut(); S.user = null; S.mgr = null; S.msg = ''; draw(); }
@@ -108,6 +109,21 @@ export function mkServer(A: any) {
   async function del(lid: string) {
     if (!confirm('حساب و همه‌ی داده‌های منتشرشده‌ی این دانش‌آموز روی سرور حذف شود؟ (اطلاعات روی لپ‌تاپ شما می‌ماند)')) return;
     try { await call({ action: 'remove', student_id: sd().accounts[lid].sid }); delete sd().accounts[lid]; A.save(); say(''); } catch (e: any) { say('خطا: ' + e.message); }
+  }
+  // حذف همه‌ی حساب‌های دانش‌آموزی از سرور (اطلاعات روی لپ‌تاپ شما می‌ماند)
+  async function delAll() {
+    const ids = Object.keys(sd().accounts);
+    if (!ids.length) { say('حسابی برای حذف وجود ندارد.'); return; }
+    if (!confirm(`همه‌ی ${n(ids.length)} حساب دانش‌آموزی با تمام داده‌های منتشرشده‌شان روی سرور (نتایج، تقویم معافیت، غیبت‌ها، شرح غیبت‌ها، مشاوره‌ها) حذف شود؟\n\nاطلاعات روی لپ‌تاپ شما می‌ماند، ولی این کار روی سرور برگشت‌پذیر نیست.`)) return;
+    if ((prompt('برای تأیید نهایی، عبارت «حذف همه» را بنویسید:') || '').trim() !== 'حذف همه') { say('حذف لغو شد.'); return; }
+    S.busy = true; let ok = 0; const bad: string[] = [];
+    for (const lid of ids) {
+      S.msg = `⏳ در حال حذف حساب‌ها… ${n(ok + bad.length)} از ${n(ids.length)}`; draw();
+      try { await call({ action: 'remove', student_id: sd().accounts[lid].sid }); delete sd().accounts[lid]; ok++; }
+      catch (e: any) { bad.push(`${stu(lid)?.name || lid}: ${e.message}`); }
+    }
+    Object.keys(lastSig).forEach((k) => delete lastSig[k]); S.creds = null; A.save();
+    say(`${n(ok)} حساب حذف شد.` + (bad.length ? ` ${n(bad.length)} مورد ناموفق (${bad.slice(0, 2).join(' | ')}) — دوباره دکمه را بزنید.` : ''));
   }
   const csv = () => A.saveFile('logins.csv', new Blob(['\ufeff' + [['نام', 'کلاس', 'نام کاربری', 'رمز'], ...S.creds.map((c: any) => [c.name, c.cls, c.user, c.pass])].map((r) => r.map((v: any) => `"${v}"`).join(',')).join('\n')], { type: 'text/csv' }));
 
@@ -200,7 +216,7 @@ export function mkServer(A: any) {
     catch (e: any) { S.auto = { st: 'err', msg: e?.message || String(e) }; if (A.toast) A.toast('همگام‌سازی با دانش‌آموزان ناموفق: ' + S.auto.msg); }
     apBusy = false;
     if (apAgain) { apAgain = false; autoPub(); }
-    else if (A.U.p === 'srv') draw();
+    else if (A.U.p === 'srv') bg();
   }
   function autoPub() {
     if (!cfgOk || !S.user || S.mgr !== true || !Object.keys(sd().accounts).length) return;
@@ -214,7 +230,7 @@ export function mkServer(A: any) {
   function acc() {
     const ss = [...A.D.students].sort((a: any, b: any) => a.cls.localeCompare(b.cls, 'fa') || (a.num || 1e9) - (b.num || 1e9));
     const creds = S.creds ? `<div class="c" style="border-color:var(--ok)"><h3>🔑 اطلاعات ورود (فقط همین‌جا دیده می‌شود)</h3><div class="tw"><table><thead><tr><th>نام</th><th>کلاس</th><th>نام کاربری</th><th>رمز</th></tr></thead><tbody>${S.creds.map((c: any) => `<tr style="cursor:default"><td>${esc(c.name)}</td><td>${c.cls}</td><td dir="ltr">${esc(c.user)}</td><td dir="ltr"><b>${esc(c.pass)}</b></td></tr>`).join('')}</tbody></table></div><div class="tb" style="margin-top:8px"><button class="btn p" onclick="srvCsv()">دانلود CSV</button><button class="btn" onclick="window.print()">چاپ</button><button class="btn" onclick="S_.creds=null;draw()">بستن</button></div></div>` : '';
-    return creds + `<div class="np"><div class="tb"><label><input type="checkbox" ${sd().firstOnly ? 'checked' : ''} onchange="srvFirst(this.checked)"> فقط نام کوچک روی سرور (حریم خصوصی)</label><button class="btn p" onclick="srvBulk()">ساخت حساب برای همه‌ی بدون حساب</button></div>
+    return creds + `<div class="np"><div class="tb"><label><input type="checkbox" ${sd().firstOnly ? 'checked' : ''} onchange="srvFirst(this.checked)"> فقط نام کوچک روی سرور (حریم خصوصی)</label><button class="btn p" onclick="srvBulk()">ساخت حساب برای همه‌ی بدون حساب</button>${Object.keys(sd().accounts).length ? `<button class="btn" style="color:var(--bad)" onclick="srvDelAll()">🗑 حذف همه‌ی حساب‌ها</button>` : ''}</div>
     <div class="c tw"><table><thead><tr><th>دانش‌آموز</th><th>کلاس</th><th>نام کاربری</th><th>رمز / نقش</th><th></th></tr></thead><tbody>${ss.map((s: any) => { const a = sd().accounts[s.id];
       return `<tr style="cursor:default"><td>${s.num ? n(s.num) + '. ' : ''}${esc(s.name)}</td><td>${s.cls}</td>` + (a ? `<td dir="ltr">${esc(a.username)} ${a.active ? '' : '<span class="tag r">غیرفعال</span>'}</td><td class="m">${a.rep ? '<span class="tag xg">⭐ نماینده</span>' : '—'}</td><td><button class="btn${a.rep ? ' p' : ''}" onclick="srvRep('${s.id}')">${a.rep ? 'لغو نمایندگی' : '⭐ نماینده‌ی کلاس'}</button> <button class="btn" onclick="srvPass('${s.id}')">تغییر رمز</button> <button class="btn" onclick="srvToggle('${s.id}')">${a.active ? 'غیرفعال' : 'فعال'}</button> <button class="btn" style="color:var(--bad)" onclick="srvDel('${s.id}')">حذف</button></td>`
         : `<td><input dir="ltr" style="width:90px" value="${esc(dr(s.id).u)}" onchange="srvDr('${s.id}','u',this.value)"></td><td><input dir="ltr" style="width:100px" value="${esc(dr(s.id).p)}" onchange="srvDr('${s.id}','p',this.value)"></td><td><button class="btn p" onclick="srvOne('${s.id}')">ساخت حساب</button></td>`) + '</tr>'; }).join('')}</tbody></table></div></div>`;
@@ -314,6 +330,6 @@ export function mkServer(A: any) {
     A.save(); const { error } = await sb.from('consults').delete().eq('id', id); if (error) { alert('در بایگانی ذخیره شد ولی حذف از سرور ناموفق: ' + error.message); } await consLoad(); say('');
   }
   const badge = () => (S.cons.filter((r: any) => r.status === 'pending').length ? `<div class="c" style="margin-bottom:10px;cursor:pointer;border-inline-start:5px solid #8b5cf6" onclick="srvGoCon()">💬 ${n(S.cons.filter((r: any) => r.status === 'pending').length)} درخواست وقت مشاوره منتظر شماست</div>` : '') + (pend() ? `<div class="c" style="margin-bottom:10px;cursor:pointer;border-inline-start:5px solid #f59e0b" onclick="srvGo()">📥 ${n(pend())} کارنامه منتظر بررسی شما است</div>` : '');
-  const h = { conTab: (k: string) => { S.ct = k; S.cform = ''; draw(); }, conForm: (id: string) => { S.cform = id; draw(); }, conPick: (id: string, iso: string, t: string) => { (document.getElementById('cd_' + id) as HTMLInputElement).value = iso2j(iso); (document.getElementById('ct_' + id) as HTMLInputElement).value = t; }, conDay: (iso: string) => { S.cdSel = iso; S.cform = ''; draw(); }, conCalNav: (k: number) => { if (k === 0) { S.cm = null; S.cdSel = isoToday(); } else { S.cm.m += k; if (S.cm.m > 12) { S.cm.m = 1; S.cm.y++; } if (S.cm.m < 1) { S.cm.m = 12; S.cm.y--; } } draw(); }, conAvLen: (v: string) => { av().len = +v; A.save(); }, conAvDay: (i: number, k: string, v: any) => { const a = av(); a.days[i] = a.days[i] || { on: 0, f: '10:00', t: '12:00' }; a.days[i][k] = v; A.save(); }, conSave, conReject, conBack, conDone, conRefresh: async () => { await consLoad(); say(''); }, conDelArc: (i: number) => { if (!confirm('از بایگانی حذف شود؟')) return; A.D.consult.splice(i, 1); A.save(); draw(); }, srvGoPage: () => { A.U.p = 'srv'; draw(); }, srvGoCon: () => { A.U.p = 'con'; S.ct = 'new'; draw(); }, annSync: async () => { if (!S.user || !S.mgr) throw new Error('login'); await syncAnn(); }, srvDr: (lid: string, k: string, val: string) => { (S.dr[lid] = S.dr[lid] || {})[k] = val.trim(); }, srvLogin: login, srvOut: logout, srvTab: (k: string) => { S.tab = k; S.msg = ''; draw(); }, srvOne: createOne, srvBulk: bulk, srvPass: pass, srvRep: rep, srvToggle: toggle, srvDel: del, srvCsv: csv, srvFirst: (v: boolean) => { sd().firstOnly = v; A.save(); }, srvFetch: fetchInbox, srvApp: approve, srvAll: approveAll, srvRej: reject, srvPub: publishAll, srvGo: () => { A.U.X = A.U.X || {}; A.U.X.tab = 'in'; A.U.p = 'exm'; draw(); }, S_: S };
+  const h = { conTab: (k: string) => { S.ct = k; S.cform = ''; draw(); }, conForm: (id: string) => { S.cform = id; draw(); }, conPick: (id: string, iso: string, t: string) => { (document.getElementById('cd_' + id) as HTMLInputElement).value = iso2j(iso); (document.getElementById('ct_' + id) as HTMLInputElement).value = t; }, conDay: (iso: string) => { S.cdSel = iso; S.cform = ''; draw(); }, conCalNav: (k: number) => { if (k === 0) { S.cm = null; S.cdSel = isoToday(); } else { S.cm.m += k; if (S.cm.m > 12) { S.cm.m = 1; S.cm.y++; } if (S.cm.m < 1) { S.cm.m = 12; S.cm.y--; } } draw(); }, conAvLen: (v: string) => { av().len = +v; A.save(); }, conAvDay: (i: number, k: string, v: any) => { const a = av(); a.days[i] = a.days[i] || { on: 0, f: '10:00', t: '12:00' }; a.days[i][k] = v; A.save(); }, conSave, conReject, conBack, conDone, conRefresh: async () => { await consLoad(); say(''); }, conDelArc: (i: number) => { if (!confirm('از بایگانی حذف شود؟')) return; A.D.consult.splice(i, 1); A.save(); draw(); }, srvGoPage: () => { A.U.p = 'srv'; draw(); }, srvGoCon: () => { A.U.p = 'con'; S.ct = 'new'; draw(); }, annSync: async () => { if (!S.user || !S.mgr) throw new Error('login'); await syncAnn(); }, srvDr: (lid: string, k: string, val: string) => { (S.dr[lid] = S.dr[lid] || {})[k] = val.trim(); }, srvLogin: login, srvOut: logout, srvTab: (k: string) => { S.tab = k; S.msg = ''; draw(); }, srvOne: createOne, srvBulk: bulk, srvPass: pass, srvRep: rep, srvToggle: toggle, srvDel: del, srvDelAll: delAll, srvCsv: csv, srvFirst: (v: boolean) => { sd().firstOnly = v; A.save(); }, srvFetch: fetchInbox, srvApp: approve, srvAll: approveAll, srvRej: reject, srvPub: publishAll, srvGo: () => { A.U.X = A.U.X || {}; A.U.X.tab = 'in'; A.U.p = 'exm'; draw(); }, S_: S };
   return { page, conPage, badge, init, h, inbox: inb, pend, refreshPend, autoPub, isMgr: () => !!(S.user && S.mgr === true) };
 }
