@@ -3,6 +3,7 @@ import { ic, initUi, toast, ANN, annHtml, j2iso, iso2j, daysLeft, isoToday } fro
 import { mkServer } from './server';
 import { mkExams } from './exams';
 import { mkAttend } from './attend';
+import { mkPlanAdmin } from './plan';
 import { initPwa } from './pwa';
 import { snapList } from './store';
 import fontUrl from './assets/vazirmatn-arabic-wght-normal.woff2?url';
@@ -67,7 +68,7 @@ function go(p){U.p=p;VSIG='';draw()}
 let VSIG='',bgT:any=0;
 /* بازرسم پس‌زمینه (بعد از دریافت/ارسال داده با سرور): اگر کاربر مشغول تایپ است صبر می‌کند تا متنش پاک نشود */
 function bgDraw(){const a=document.activeElement as HTMLElement|null;if(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)&&a.closest&&a.closest('#app')){clearTimeout(bgT);bgT=setTimeout(bgDraw,3000);return}draw()}
-function draw(){const sig=[U.p,U.sid,U.xs,U.stab,U.X&&U.X.tab,U.AT&&U.AT.tab].join('|'),nav=sig!==VSIG,y=window.scrollY;VSIG=sig;ensureNums();ensureEx();if(typeof AT2!=='undefined')AT2.warm();if(U.w==null)U.w=wk0();$('#dt').textContent=new Date().toLocaleDateString('fa-IR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+function draw(){if(typeof PLA!=='undefined'&&!D.plan){PLA.ensure();setTimeout(save,0)}const sig=[U.p,U.sid,U.xs,U.stab,U.X&&U.X.tab,U.AT&&U.AT.tab].join('|'),nav=sig!==VSIG,y=window.scrollY;VSIG=sig;ensureNums();ensureEx();if(typeof AT2!=='undefined')AT2.warm();if(U.w==null)U.w=wk0();$('#dt').textContent=new Date().toLocaleDateString('fa-IR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
  const cur=U.p==='sp'?'stu':U.p;$('#nv').innerHTML=PG.map(([k,t,i])=>`<button class="${cur===k?'on':''}" onclick="go('${k}')" aria-label="${t}">${ic(i)}<span>${t}</span>${k==='exm'&&SV.pend()?`<i class="bdg">${n(SV.pend())}</i>`:''}${k==='day'&&AT2.badge()?`<i class="bdg">${n(AT2.badge())}</i>`:''}</button>`).join('');
  $('#pt').textContent=U.p==='sp'?'پروفایل دانش‌آموز':(PG.find(p=>p[0]===U.p)||[,''])[1];
  if(nav){$('#app').classList.remove('in');void ($('#app') as any).offsetWidth;$('#app').classList.add('in')}
@@ -485,10 +486,11 @@ async function xpng(){const sv=U.sv&&D.students.find(s=>s.id===U.sv&&s.cls===U.x
  const img=new Image();img.onload=()=>{const k=2,cv=document.createElement('canvas');cv.width=img.width*k;cv.height=img.height*k;const c=cv.getContext('2d');c.scale(k,k);c.drawImage(img,0,0);cv.toBlob(b=>saveFile(`${U.xc}-${sv?nm(sv)+'-':''}هفته.png`,b),'image/png')};
  img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg)}
 const SV=mkServer({get D(){return D},annActive:()=>annActive(),toast,letterC,bg:()=>bgDraw(),sexams,save,draw:()=>draw(),esc,n,saveFile,ensureEx,tt,status,letter,dateOf,wk0,commit:(f:any)=>commit(f),CFG,U});
-const EX=mkExams({get D(){return D},U,save,draw:()=>draw(),bg:()=>bgDraw(),esc,n,n1,avg,line,hue,spark,CL,byNum,today,SV,scn,schp:()=>schp(),FILES:()=>FILES,dlf:(...a:any[])=>(dlf as any)(...a),toast});
+const PLA=mkPlanAdmin({get D(){return D},U,save,draw:()=>draw(),esc,n,toast});
+const EX=mkExams({get D(){return D},U,save,draw:()=>draw(),bg:()=>bgDraw(),plan:()=>PLA.page(),esc,n,n1,avg,line,hue,spark,CL,byNum,today,SV,scn,schp:()=>schp(),FILES:()=>FILES,dlf:(...a:any[])=>(dlf as any)(...a),toast});
 const AT2=mkAttend({get D(){return D},U,letterC,bg:()=>bgDraw(),esc,n,save,draw:()=>draw(),toast,dateOf,wk0,mid,DAYN,GL,GC,CL,letter,status,subj,byNum,SV,dlf:(...a:any[])=>(dlf as any)(...a),bars,op,sf});
 AP=SV.autoPub;
-Object.assign(W,SV.h,EX.h,AT2.h);
+Object.assign(W,SV.h,EX.h,AT2.h,PLA.h);
 SV.init();
 /* ---------- آزمون‌های مدرسه (فقط نمره‌ی هر درس؛ بدون معدل) ---------- */
 function mkSch(t:string,date:string,c:string){const ls=[...new Set(tt(c).flat().filter(Boolean))].map((name:string)=>({name,max:20}));const id='h'+Date.now().toString(36);ensureSch().exams.push({id,title:t,date,cls:c,lessons:ls,sc:{}});U.sx=id;save()}

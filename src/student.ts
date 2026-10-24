@@ -5,6 +5,7 @@ import { sb, cfgOk } from './supa';
 import { initPwa } from './pwa';
 import { importReport, ExamSettings } from './scan';
 import { mkAttGrid } from './attgrid';
+import { planView, nextExam, exTitle, exDateLabel, exLeft } from './plan';
 
 const $ = (s: string) => document.querySelector(s) as any;
 const esc = (s: any) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' } as any)[c]);
@@ -14,7 +15,7 @@ const DAYN = ['شنبه', 'یکشنبه', 'سه‌شنبه', 'چهارشنبه']
 const STN: any = { g: 'معاف (گروه)', f: 'معاف (معلم)', p: 'معاف (پیشرفت)' };
 const SUBJ = ['ریاضی', 'فیزیک', 'شیمی', 'زیست', 'ادبیات', 'عربی', 'دین و زندگی', 'زبان'];
 const CFG: ExamSettings = { sections: SUBJ.map((name, i) => ({ id: 'u' + i, name, color: '#888', n: 0, parts: [] })) };
-const T: any = { con: [], ann: [], xi: 'ماز', sch: [], u: null, me: null, exams: [], cal: [], pend: 0, p: 'home', wi: null, open: null, prev: null, err: '', busy: false, ok: '', login: '', rc: [], rw: 0, rd: 0, rerr: '', ab: [], at: null, atErr: '', ae: {}, ab0: {}, atBusy: false, ap: 0 };
+const T: any = { con: [], ann: [], xi: 'ماز', sch: [], u: null, me: null, exams: [], cal: [], pend: 0, p: 'home', wi: null, open: null, prev: null, err: '', busy: false, ok: '', login: '', rc: [], rw: 0, rd: 0, rerr: '', ab: [], at: null, atErr: '', ae: {}, ab0: {}, atBusy: false, ap: 0, plan: null, plk: 'all' };
 const W: any = window;
 const jdate = (iso: string, o: any = { day: 'numeric', month: 'long' }) => new Date(iso + 'T12:00:00').toLocaleDateString('fa-IR', o);
 const todayIso = () => { const t = new Date(), p = (x: number) => String(x).padStart(2, '0'); return `${t.getFullYear()}-${p(t.getMonth() + 1)}-${p(t.getDate())}`; };
@@ -35,7 +36,7 @@ async function login() {
 }
 async function logout() { await sb.auth.signOut(); T.u = null; T.me = null; T.p = 'home'; draw(); }
 async function load() {
-  const [m, e, c, s, h, an, cs, ab] = await Promise.all([
+  const [m, e, c, s, h, an, cs, ab, pl] = await Promise.all([
     sb.from('students').select('*').maybeSingle(),
     sb.from('exams_pub').select('*'),
     sb.from('calendar_pub').select('*').order('week_start'),
@@ -44,8 +45,9 @@ async function load() {
     sb.from('announcements').select('*'),
     sb.from('consults').select('*').order('created_at', { ascending: false }),
     sb.from('attendance').select('*').order('day', { ascending: false }),
+    sb.from('exam_plan').select('data').eq('id', 'main').maybeSingle(),
   ]);
-  T.con = cs.data || []; T.ab = ab.error ? [] : ab.data || [];
+  T.con = cs.data || []; T.ab = ab.error ? [] : ab.data || []; T.plan = pl.error ? null : pl.data?.data || null;
   T.ann = (an.data || []).filter((a: any) => daysLeft(a.exp) >= 0 && (!a.starts || daysLeft(a.starts) <= 0)).sort((a: any, b: any) => (b.pin ? 1 : 0) - (a.pin ? 1 : 0) || (a.exp < b.exp ? -1 : 1));
   T.sch = (h.data || []).sort((a: any, b: any) => (a.date < b.date ? 1 : -1));
   T.me = m.data; T.exams = (e.data || []).sort((a: any, b: any) => (a.date < b.date ? -1 : 1)); T.cal = c.data || []; T.pend = s.count || 0;
@@ -64,11 +66,11 @@ function draw() {
   document.body.classList.toggle('guest', !T.me);
   $('#who').textContent = T.me ? T.me.name : 'پنل دانش‌آموز';
   if (!T.me) { $('#nv').innerHTML = ''; $('#pt').textContent = 'ورود'; $('#app').innerHTML = loginView(); return; }
-  const P = [['home', 'خانه', 'home'], ['ann', 'اطلاعیه‌ها', 'bell'], ['con', 'وقت مشاوره', 'chat'], ['cal', 'تقویم معافیت', 'cal'], ['abs', 'غیبت‌های من', 'att'], ...(T.me.is_rep ? [['rat', 'حضور و غیاب کلاس', 'clip'], ['rcal', 'تقویم معافیت کلاس', 'users']] : []), ['exm', 'آزمون‌ها', 'clip'], ['send', 'ارسال کارنامه', 'up']];
+  const P = [['home', 'خانه', 'home'], ['ann', 'اطلاعیه‌ها', 'bell'], ['con', 'وقت مشاوره', 'chat'], ['cal', 'تقویم معافیت', 'cal'], ['pln', 'برنامه آزمون‌ها', 'plan'], ['abs', 'غیبت‌های من', 'att'], ...(T.me.is_rep ? [['rat', 'حضور و غیاب کلاس', 'clip'], ['rcal', 'تقویم معافیت کلاس', 'users']] : []), ['exm', 'آزمون‌ها', 'clip'], ['send', 'ارسال کارنامه', 'up']];
   $('#nv').innerHTML = P.map(([k, t, i]) => `<button class="${T.p === k ? 'on' : ''}" onclick="go('${k}')" aria-label="${t}">${ic(i)}<span>${t}</span>${k === 'ann' && T.ann.length ? `<em class="bdg">${T.ann.length.toLocaleString('fa-IR')}</em>` : ''}${k === 'con' && upcoming().length ? `<em class="bdg" style="background:var(--ok)">${upcoming().length.toLocaleString('fa-IR')}</em>` : ''}</button>`).join('');
   $('#pt').textContent = (P.find((p) => p[0] === T.p) || ['', ''])[1];
   const a = $('#app'); a.classList.remove('in'); void a.offsetWidth; a.classList.add('in');
-  a.innerHTML = ({ home, ann, con, cal, rcal, exm, send, abs, rat } as any)[T.p]();
+  a.innerHTML = ({ home, ann, con, cal, rcal, exm, send, abs, rat, pln } as any)[T.p]();
 }
 const go = (p: string) => { T.p = p; T.ok = ''; T.err = ''; draw(); window.scrollTo(0, 0); };
 function loginView() {
@@ -86,8 +88,9 @@ function home() {
   const insCard = (ins: string) => { const ex = T.exams.filter((e: any) => e.inst === ins), l = ex[ex.length - 1], p = ex[ex.length - 2]; if (!l) return ''; const d = p ? l.level - p.level : null;
     return `<div class="c k" onclick="T.xi='${ins}';go('exm')" style="cursor:pointer"><span>${ins}</span><b>${n(l.level)}</b><span>تراز ${d != null ? `<span class="${d >= 0 ? 'up' : 'dn'}">${d >= 0 ? '▲' : '▼'} ${n(Math.abs(d))}</span>` : ''} · رتبه ${n(l.rank)}</span></div>`; };
   const sl = T.sch[0];
-  const rp = repTodo();
+  const rp = repTodo(), pex = nextExam(T.plan), pexd = pex ? exLeft(pex, n) : '';
   return `<div class="homehero"><div><small>خوش آمدی 👋</small><h2>سلام ${esc(T.me.name)}</h2></div></div>
+  ${pex ? `<div class="ann" style="--ac2:#0891b2" onclick="go('pln')"><div class="ai">🗓️</div><div class="ab"><div><b>آزمون بعدی: ${esc(exTitle(pex))} — ${esc(exDateLabel(pex))}${pexd ? ' (' + pexd + ')' : ''}</b></div></div></div>` : ''}
   ${rp ? `<div class="ann" style="--ac2:#6366f1" onclick="go('rat')"><div class="ai">📋</div><div class="ab"><div><b>حضور و غیاب امروز: ${n(rp)} زنگ هنوز ثبت نشده است.</b></div></div></div>` : ''}
   ${upcoming()[0] ? (() => { const c = upcoming()[0]; return `<div class="ann" style="--ac2:#10b981" onclick="go('con')"><div class="ai">🗓️</div><div class="ab"><div><b>وقت مشاوره‌ی شما (${rel(c.slot_date)}): ${jdate(c.slot_date, { weekday: 'long', day: 'numeric', month: 'long' })} — ساعت ${ftime(c.slot_time)}</b></div>${c.place ? `<span class="tag">📍 ${esc(c.place)}</span>` : ''}${c.note ? `<p>${esc(c.note)}</p>` : ''}</div></div>`; })() : ''}
   ${T.ann.length ? `<div style="margin-bottom:6px">${T.ann.slice(0, 2).map((a: any) => annHtml(a)).join('')}${T.ann.length > 2 ? `<p class="m" style="margin:0 0 10px"><a href="#" onclick="go('ann');return false" style="color:var(--ac)">دیدن همه‌ی ${T.ann.length.toLocaleString('fa-IR')} اطلاعیه ←</a></p>` : ''}</div>` : ''}
@@ -105,6 +108,7 @@ function absGroups() {
   const m: any = {}; (T.ab || []).forEach((r: any) => { (m[r.day] = m[r.day] || []).push(r); });
   return Object.keys(m).sort().reverse().map((day) => ({ day, rs: m[day].sort((a: any, b: any) => a.period - b.period) }));
 }
+function pln() { return planView(T.plan, { kind: T.plk || 'all', setKind: 'plKind', esc, n }); }
 function abs() {
   const G = absGroups(), A = T.ab || [], days = G.filter((g: any) => g.rs.some((r: any) => r.status === 'absent')).length, per = A.filter((r: any) => r.status === 'absent').length, late = A.filter((r: any) => r.status === 'late').length;
   const kp = (b: number, t: string, c = '') => `<div class="c k"><b class="${c}">${n(b)}</b><span>${t}</span></div>`;
@@ -270,5 +274,5 @@ async function submitIt() {
 
 initUi();
 initPwa();
-Object.assign(W, { conSend, conCancel, T, draw, go, login, logout, pick, submitIt });
+Object.assign(W, { conSend, conCancel, T, draw, go, login, logout, pick, submitIt, plKind: (k: string) => { T.plk = k; draw(); }, plGo: (id: string) => { document.getElementById('pl_' + id)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); } });
 boot();

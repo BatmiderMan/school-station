@@ -195,6 +195,8 @@ export function mkServer(A: any) {
     });
     S.annErr = '';
     try { await syncAnn(); } catch (e: any) { S.annErr = 'اطلاعیه‌ها منتشر نشد: ' + (e.message || e) + ' — فایل‌های supabase/update-3.sql و update-4.sql را اجرا کنید.'; }
+    S.planErr = '';
+    try { if (A.D.plan) await up('exam_plan', [{ id: 'main', data: A.D.plan }], 'id'); } catch (e: any) { S.planErr = 'برنامه‌ی آزمون‌ها منتشر نشد: ' + (e.message || e) + ' — فایل supabase/update-11.sql را اجرا کنید.'; }
     S.schErr = '';
     try { await up('school_pub', sch, 'student_id,exam_key'); } catch (e: any) { S.schErr = 'نمره‌های مدرسه منتشر نشد: ' + (e.message || e) + ' — فایل supabase/update-2.sql را اجرا کنید.'; }
     await sb.from('calendar_pub').delete().lt('week_start', A.dateOf(w0, 0).toISOString().slice(0, 10));
@@ -251,7 +253,7 @@ export function mkServer(A: any) {
   // وضعیت همگام‌سازی خودکار با پنل دانش‌آموزان
   const pub = () => {
     const a = S.auto || {}, st = a.st === 'wait' ? '⏳ در حال همگام‌سازی…' : a.st === 'err' ? '⚠ همگام‌سازی ناموفق' : a.st === 'ok' ? `✅ همه‌چیز برای دانش‌آموزان به‌روز است (${a.at})` : '🔄 خودکار';
-    return `<div class="c np" style="margin-bottom:10px"><div class="tb" style="margin:0"><div style="flex:1;min-width:200px"><b>${st}</b><div class="m">معافیت‌ها، نتایج آزمون، اطلاعیه‌ها و نمرات بعد از هر تغییر خودکار برای دانش‌آموزان به‌روز می‌شود؛ نیازی به «انتشار» نیست.</div>${a.st === 'err' ? `<div class="dn">${esc(a.msg)}</div>` : ''}${S.schErr ? `<div class="dn">${esc(S.schErr)}</div>` : ''}${S.annErr ? `<div class="dn">${esc(S.annErr)}</div>` : ''}</div><button class="btn" onclick="srvPub()" title="اگر شک دارید، همه‌چیز را دوباره بفرستید">🔄 ارسال مجدد همه</button></div></div>`;
+    return `<div class="c np" style="margin-bottom:10px"><div class="tb" style="margin:0"><div style="flex:1;min-width:200px"><b>${st}</b><div class="m">معافیت‌ها، نتایج آزمون، اطلاعیه‌ها و نمرات بعد از هر تغییر خودکار برای دانش‌آموزان به‌روز می‌شود؛ نیازی به «انتشار» نیست.</div>${a.st === 'err' ? `<div class="dn">${esc(a.msg)}</div>` : ''}${S.schErr ? `<div class="dn">${esc(S.schErr)}</div>` : ''}${S.annErr ? `<div class="dn">${esc(S.annErr)}</div>` : ''}${S.planErr ? `<div class="dn">${esc(S.planErr)}</div>` : ''}</div><button class="btn" onclick="srvPub()" title="اگر شک دارید، همه‌چیز را دوباره بفرستید">🔄 ارسال مجدد همه</button></div></div>`;
   };
   function page() {
     if (!cfgOk) return `<div class="c"><h3>اتصال به سرور تنظیم نشده</h3><p>فایل <code dir="ltr">src/config.ts</code> را با آدرس و کلید عمومی پروژه‌ی Supabase پر کنید (راهنما: SETUP.md).</p></div>`;

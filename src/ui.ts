@@ -1,5 +1,6 @@
 // اجزای مشترک رابط: آیکون‌ها، پیام‌های شناور (toast)، تم روشن/تاریره
 const ICO: any = {
+  plan: '<path d="M5 21V4M5 4h12l-3 4 3 4H5"/>',
   att: '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l3 3 5-6"/>',
 
   home: '<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>',
