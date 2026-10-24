@@ -3,6 +3,8 @@ export interface Part { id: string; name: string; n: number; children?: Part[] }
 export interface Section { id: string; name: string; color: string; n: number; parts: Part[] }
 export interface ExamSettings { sections: Section[] }
 import { extractPdfJpeg, fileToRaster } from './loadReport';
+import type { Raster } from './raster';
+import { nameFromFilename, tokens } from './nameMatch';
 import { extractPdfText } from './pdfText';
 import { MONTHS, QLesson, baseOf, lev, norm, parseQalamchi, squash } from './qalamchiReport';
 import { MazReport, parseMazReport, sigDistance } from './mazReport';
@@ -12,6 +14,8 @@ export interface ImportRow { index: number; label?: string; sectionName: string;
 export interface ImportedExam {
   institute: string; title: string; date: string; time?: string; rows: ImportRow[];
   level: number | null; countryRank: number | null; regionRank: number | null; participants: number | null; warnings: string[]; extraNotes?: string[];
+  /** who the sheet belongs to, as far as the file tells: name from the PDF text, from the file name, and (Maz images) a crop of the name cards */
+  detected?: { name: string; source: 'pdf' | 'filename' | ''; alt: string; group?: string; crop?: string; avgLevel?: number | null };
 }
 export const INSTITUTES = [{ id: 'maz', label: 'ماز', hint: 'کارنامه‌ی تحلیلی (PDF یا عکس)' }, { id: 'qalamchi', label: 'قلم‌چی', hint: 'کارنامه‌ی PDF از kanoon.ir' }];
 
@@ -22,9 +26,21 @@ export function rememberHeading(sig: string, name: string): void {
   try { localStorage.setItem(SEEN_KEY, JSON.stringify([...rest, { name, sig }].slice(-40))); } catch (e) { /* ignore */ }
 }
 
+/** the «نام» and «نام خانوادگی» cards of a Maz sheet (fixed layout: 2400 px wide page) as a small picture the manager can read at a glance */
+function mazNameCrop(r: Raster): string {
+  try {
+    const s = r.width / 2400, x0 = Math.round(1680 * s), x1 = Math.min(r.width, Math.round(2364 * s)), y0 = Math.round(430 * s), y1 = Math.min(r.height, Math.round(640 * s));
+    if (x1 - x0 < 50 || y1 - y0 < 30) return '';
+    const cv = document.createElement('canvas'); cv.width = r.width; cv.height = r.height; (cv.getContext('2d') as CanvasRenderingContext2D).putImageData(new ImageData(new Uint8ClampedArray(r.data), r.width, r.height), 0, 0);
+    const out = document.createElement('canvas'); out.width = x1 - x0; out.height = y1 - y0;
+    (out.getContext('2d') as CanvasRenderingContext2D).drawImage(cv, x0, y0, x1 - x0, y1 - y0, 0, 0, x1 - x0, y1 - y0);
+    return out.toDataURL('image/jpeg', 0.72);
+  } catch (e) { return ''; }
+}
 const slash = (d: string) => d.replace(/\//g, '/');
 export async function importMaz(file: File, cfg: ExamSettings): Promise<{ exam: ImportedExam; sigs: string[] }> {
-  const rep: MazReport = parseMazReport(await fileToRaster(file));
+  const raster = await fileToRaster(file);
+  const rep: MazReport = parseMazReport(raster);
   const known = [...loadSeen(), ...KNOWN_HEADINGS];
   const used = new Set<string>();
   const rows: ImportRow[] = rep.sections.map((s) => {
@@ -43,7 +59,8 @@ export async function importMaz(file: File, cfg: ExamSettings): Promise<{ exam: 
     sigs: rep.sections.map((s) => s.sig),
     exam: {
       institute: 'ماز', title: `آزمون ماز${rep.stage ? ' مرحله ' + rep.stage : ''}`, date: rep.date || '', time: rep.time || undefined, rows,
-      level: rep.level, countryRank: rep.countryRank, regionRank: rep.regionRank, participants: rep.participants, warnings
+      level: rep.level, countryRank: rep.countryRank, regionRank: rep.regionRank, participants: rep.participants, warnings,
+      detected: { name: '', source: '', alt: '', crop: mazNameCrop(raster) }
     }
   };
 }
@@ -82,10 +99,13 @@ export function placeLesson(ls: QLesson, cfg: ExamSettings): { sectionName: stri
   }
   // (c) any section that holds a part with this base number-suffixed (e.g. زیست ۱۰ …) or nothing known
   for (const s of cfg.sections) if (s.parts.some((p) => bareName(p.name) === base)) return { sectionName: s.name, partName: withGrade(s.name), recognised: true };
+  // (d) math-major lessons (حسابان، هندسه، گسسته، آمار و احتمال) all count as the «ریاضی» section
+  if (MATH.includes(base)) { const s = cfg.sections.find((x) => bareName(x.name) === squash('ریاضی')); if (s) return { sectionName: s.name, partName: ls.label, recognised: true }; }
   return { sectionName: '', partName: ls.label, recognised: false };
 }
+const MATH = ['حسابان', 'هندسه', 'گسسته', 'آمار و احتمال', 'آمارواحتمال', 'ریاضی'].map(squash);
 
-export function importQalamchi(rep: ReturnType<typeof parseQalamchi>, cfg: ExamSettings): ImportedExam {
+export function importQalamchi(rep: ReturnType<typeof parseQalamchi>, cfg: ExamSettings, fileName = ''): ImportedExam {
   const used = new Set<string>();
   const rows: ImportRow[] = rep.lessons.map((ls, i) => {
     const pl = placeLesson(ls, cfg);
@@ -101,19 +121,22 @@ export function importQalamchi(rep: ReturnType<typeof parseQalamchi>, cfg: ExamS
   ].filter(Boolean);
   return {
     institute: 'قلم‌چی', title: `آزمون قلم‌چی${dateLabel ? ' ' + dateLabel : ''}`, date: rep.date || '', rows,
-    level: rep.level, countryRank: rep.countryRank, regionRank: rep.regionRank, participants: null, warnings: [...rep.warnings], extraNotes: extra
+    level: rep.level, countryRank: rep.countryRank, regionRank: rep.regionRank, participants: rep.participants, warnings: [...rep.warnings], extraNotes: extra,
+    detected: { name: rep.studentName, source: rep.studentName ? 'pdf' : 'filename', alt: nameFromFilename(fileName), group: rep.group, avgLevel: rep.avgLevel }
   };
 }
 
 /** one entry point for the import button: picks the reader from the file itself */
-export async function importReport(file: File, cfg: ExamSettings): Promise<{ exam: ImportedExam; sigs: string[] }> {
+export async function importReport(file: File, cfg: ExamSettings, roster: string[] = []): Promise<{ exam: ImportedExam; sigs: string[] }> {
   const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
   if (isPdf) {
     const bytes = new Uint8Array(await file.arrayBuffer());
     const items = await extractPdfText(bytes).catch(() => []);
-    if (items.length > 40) return { exam: importQalamchi(parseQalamchi(items), cfg), sigs: [] };
+    if (items.length > 40) return { exam: importQalamchi(parseQalamchi(items, roster.flatMap((n) => tokens(n))), cfg, file.name), sigs: [] };
     if (!extractPdfJpeg(bytes)) throw new Error('pdf');
   }
-  return importMaz(file, cfg);
+  const r = await importMaz(file, cfg);
+  if (r.exam.detected) r.exam.detected.alt = nameFromFilename(file.name);
+  return r;
 }
 

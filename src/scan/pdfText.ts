@@ -2,7 +2,9 @@
 // Handles the plain structure those files use — flate content streams, Type0/Identity-H fonts with a ToUnicode map.
 // It is not a general PDF reader; anything it cannot understand makes it return an empty list.
 
-export interface TextItem { text: string; x: number; y: number; size: number; bold: boolean } // x right-ward, y downward, page units
+export interface TextItem { text: string; x: number; y: number; size: number; bold: boolean; x0?: number; x1?: number } // x right-ward, y downward, page units; x0/x1 = left/right-most glyph origin
+/** a glyph the font's ToUnicode map does not know is kept as a private-use character (the same glyph always gets the same one) so a later step can learn what letter it is */
+export const isUnk = (ch: string) => ch.length === 1 && ch.charCodeAt(0) >= 0xe000 && ch.charCodeAt(0) < 0xf000;
 
 type M = [number, number, number, number, number, number];
 const mul = (a: M, b: M): M => [a[0] * b[0] + a[1] * b[2], a[0] * b[1] + a[1] * b[3], a[2] * b[0] + a[3] * b[2], a[2] * b[1] + a[3] * b[3], a[4] * b[0] + a[5] * b[2] + b[4], a[4] * b[1] + a[5] * b[3] + b[5]];
@@ -50,12 +52,16 @@ function parseToUnicode(cm: string): Map<number, string> {
   for (const blk of cm.matchAll(/beginbfrange([\s\S]*?)endbfrange/g)) {
     for (const m of blk[1].matchAll(/<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>\s*(\[[^\]]*\]|<[0-9a-fA-F]+>)/g)) {
       const a = parseInt(m[1], 16), b = parseInt(m[2], 16);
-      if (m[3][0] === '[') { const items = [...m[3].matchAll(/<([0-9a-fA-F]+)>/g)].map((x) => u16(x[1])); for (let c = a; c <= b && c - a < items.length; c++) map.set(c, items[c - a]); }
+      // Qt writes arrays that are longer than the declared range; poppler maps every entry, so do we
+      if (m[3][0] === '[') { const items = [...m[3].matchAll(/<([0-9a-fA-F]+)>/g)].map((x) => u16(x[1])); void b; for (let i = 0; i < items.length; i++) map.set(a + i, items[i]); }
       else { const base = parseInt(m[3].slice(1, -1), 16); const hexLen = m[3].length - 2; for (let c = a; c <= b; c++) map.set(c, u16((base + c - a).toString(16).padStart(hexLen, '0'))); }
     }
   }
   return map;
 }
+
+const fontOrder: string[] = [];
+const fontIdx = (name: string) => { let i = fontOrder.indexOf(name); if (i < 0) { fontOrder.push(name); i = fontOrder.length - 1; } return i; };
 
 export async function extractPdfText(bytes: Uint8Array): Promise<TextItem[]> {
   const objs = readObjects(bytes);
@@ -88,7 +94,8 @@ export async function extractPdfText(bytes: Uint8Array): Promise<TextItem[]> {
   const flush = () => {
     if (!glyphs.length) return;
     const f = fonts.get(font);
-    items.push({ text: glyphs.map((g) => g.ch).join(''), x: glyphs.reduce((a, g) => a + g.x, 0) / glyphs.length, y: pageH - glyphs[0].y, size, bold: !!f?.bold });
+    const gx = glyphs.map((g) => g.x);
+    items.push({ text: glyphs.map((g) => g.ch).join(''), x: gx.reduce((a, b) => a + b, 0) / gx.length, y: pageH - glyphs[0].y, size, bold: !!f?.bold, x0: Math.min(...gx), x1: Math.max(...gx) });
     glyphs = [];
   };
   const show = (hex: string) => {
@@ -96,7 +103,8 @@ export async function extractPdfText(bytes: Uint8Array): Promise<TextItem[]> {
     const p = mul(tm, ctm); // glyph origin in device space
     for (let i = 0; i + 3 < h.length + 0; i += 4) {
       const code = parseInt(h.slice(i, i + 4), 16);
-      glyphs.push({ x: p[4], y: p[5], ch: f?.map.get(code) ?? '' });
+      const known = f?.map.get(code);
+      glyphs.push({ x: p[4], y: p[5], ch: known !== undefined ? known : String.fromCharCode(0xe000 + ((fontIdx(font) & 31) << 10) + (code & 1023)) });
     }
   };
   let m: RegExpExecArray | null; let inArr = false;

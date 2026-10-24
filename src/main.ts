@@ -3,11 +3,11 @@ import { ic, initUi, toast, ANN, annHtml, j2iso, iso2j, daysLeft, isoToday } fro
 import { mkServer } from './server';
 import { mkExams } from './exams';
 import { mkAttend } from './attend';
-import { mkPlanAdmin } from './plan';
 import { initPwa } from './pwa';
 import { snapList } from './store';
 import fontUrl from './assets/vazirmatn-arabic-wght-normal.woff2?url';
 import { importReport, rememberHeading, INSTITUTES, ImportedExam, ExamSettings } from './scan';
+import { matchStudents, confident } from './scan/nameMatch';
 export function start(){
 
 const CL:string[]=['تجربی ۳۲۱','تجربی ۳۲۲','ریاضی ۳۱۱'],CC=['var(--c0)','var(--c1)','var(--c2)'];
@@ -68,7 +68,7 @@ function go(p){U.p=p;VSIG='';draw()}
 let VSIG='',bgT:any=0;
 /* بازرسم پس‌زمینه (بعد از دریافت/ارسال داده با سرور): اگر کاربر مشغول تایپ است صبر می‌کند تا متنش پاک نشود */
 function bgDraw(){const a=document.activeElement as HTMLElement|null;if(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)&&a.closest&&a.closest('#app')){clearTimeout(bgT);bgT=setTimeout(bgDraw,3000);return}draw()}
-function draw(){if(typeof PLA!=='undefined'&&!D.plan){PLA.ensure();setTimeout(save,0)}const sig=[U.p,U.sid,U.xs,U.stab,U.X&&U.X.tab,U.AT&&U.AT.tab].join('|'),nav=sig!==VSIG,y=window.scrollY;VSIG=sig;ensureNums();ensureEx();if(typeof AT2!=='undefined')AT2.warm();if(U.w==null)U.w=wk0();$('#dt').textContent=new Date().toLocaleDateString('fa-IR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+function draw(){const sig=[U.p,U.sid,U.xs,U.stab,U.X&&U.X.tab,U.AT&&U.AT.tab].join('|'),nav=sig!==VSIG,y=window.scrollY;VSIG=sig;ensureNums();ensureEx();if(typeof AT2!=='undefined')AT2.warm();if(U.w==null)U.w=wk0();$('#dt').textContent=new Date().toLocaleDateString('fa-IR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
  const cur=U.p==='sp'?'stu':U.p;$('#nv').innerHTML=PG.map(([k,t,i])=>`<button class="${cur===k?'on':''}" onclick="go('${k}')" aria-label="${t}">${ic(i)}<span>${t}</span>${k==='exm'&&SV.pend()?`<i class="bdg">${n(SV.pend())}</i>`:''}${k==='day'&&AT2.badge()?`<i class="bdg">${n(AT2.badge())}</i>`:''}</button>`).join('');
  $('#pt').textContent=U.p==='sp'?'پروفایل دانش‌آموز':(PG.find(p=>p[0]===U.p)||[,''])[1];
  if(nav){$('#app').classList.remove('in');void ($('#app') as any).offsetWidth;$('#app').classList.add('in')}
@@ -207,14 +207,18 @@ const wipe=()=>{if(confirm('همه‌ی داده‌ها پاک شود؟')){D={st
 
 /* ---------- scanner ---------- */
 const CFG:ExamSettings={sections:SUBJ.map((name,i)=>({id:'u'+i,name,color:'#888',n:0,parts:[]}))};
-interface FI{id:number;file:File;st:'busy'|'ok'|'err';err?:string;x?:ImportedExam;sigs:string[];sid:string;done?:boolean;eid?:string}
+interface FI{id:number;file:File;st:'busy'|'ok'|'err';err?:string;x?:ImportedExam;sigs:string[];sid:string;done?:boolean;eid?:string;hits?:any[];auto?:boolean}
 let FILES:FI[]=[];let FID=0;
-async function pick(inp){const fs=Array.from(inp.files||[]) as File[];inp.value='';for(const f of fs){const it:FI={id:++FID,file:f,st:'busy',sigs:[],sid:guessSid(f.name)};FILES.push(it);}draw();
- for(const it of FILES.filter(f=>f.st==='busy')){try{const r=await importReport(it.file,CFG);it.x=r.exam;it.sigs=r.sigs;it.st='ok'}catch(e){it.st='err';it.err=e&&e.message==='layout'?'ساختار کارنامه شناخته نشد (فقط کارنامه‌ی تحلیلی ماز یا PDF قلم‌چی)':'فایل خوانده نشد'}draw()}}
+async function pick(inp){const fs=Array.from(inp.files||[]) as File[];inp.value='';for(const f of fs){const it:FI={id:++FID,file:f,st:'busy',sigs:[],sid:''};FILES.push(it);}draw();
+ for(const it of FILES.filter(f=>f.st==='busy')){try{const r=await importReport(it.file,CFG,D.students.map((s:any)=>s.name));it.x=r.exam;it.sigs=r.sigs;it.st='ok';matchFile(it)}catch(e){it.st='err';it.err=e&&e.message==='layout'?'ساختار کارنامه شناخته نشد (فقط کارنامه‌ی تحلیلی ماز یا PDF قلم‌چی)':'فایل خوانده نشد'}draw()}}
 const nzf=(t:string)=>normQ(String(t)).replace(/[\s_\-.()]+/g,' ').trim();
+/** who is this sheet? name from the PDF text + from the file name, matched fuzzily against the roster (order-free, typo-tolerant) */
+function matchFile(it:FI){const det=it.x?.detected,cands=[det?.name,det?.alt].filter(Boolean) as string[];it.hits=matchStudents(cands,D.students.map((s:any)=>({id:s.id,name:s.name}))).slice(0,4);const c=confident(it.hits);if(c){it.sid=c.id;it.auto=true}}
+function detHtml(f:FI){const x=f.x!,det=x.detected,top=f.hits||[],dup=FILES.some(q=>q!==f&&q.sid&&q.sid===f.sid&&q.x&&q.x.institute===x.institute&&q.x.date===x.date);
+ return `<div class="m" style="margin:2px 0 8px">${det?.name?`نام روی کارنامه: <b>${esc(det.name)}</b>`:det?.alt?`نام از روی نام فایل: <b>${esc(det.alt)}</b>`:'نام در فایل پیدا نشد؛ دانش‌آموز را انتخاب کنید'}${f.auto&&top[0]?` <span class="tag" style="background:#10b98122">✓ تطبیق خودکار ${n(top[0].score*100)}٪</span>`:top.length?` <span class="tag r">تطبیق مطمئن نیست</span>`:''}${dup?' <span class="tag r">این دانش‌آموز برای همین آزمون در لیست دوباره آمده</span>':''}</div>${det?.crop?`<img class="ncrop" src="${det.crop}" alt="نام روی کارنامه">`:''}${top.length>(f.auto?1:0)?`<div class="chips">${top.map(h=>`<button class="${f.sid===h.id?'on':''}" onclick="sfs(${f.id},'${h.id}');draw()">${esc(h.name)} · ${n(h.score*100)}٪</button>`).join('')}</div>`:''}`}
 function guessSid(fn:string){const f=nzf(fn.replace(/\.[^.]+$/,'')),m=D.students.filter((s:any)=>{const t=nzf(s.name).split(' ').filter(Boolean);return t.length>0&&t.every((w:string)=>f.includes(w))});return m.length===1?m[0].id:''}
 function scn(){const E=exs();
- return `<div class="c scn"><h3>📄 اسکن کارنامه‌ی ماز و قلم‌چی</h3><p class="m">PDF یا عکس کارنامه‌ها را یک‌جا انتخاب کنید (هر تعداد). مؤسسه، تاریخ و اعداد خودکار خوانده می‌شود. اگر اسم دانش‌آموز در نام فایل باشد (مثلاً «علی احمدی.pdf») خودش پیدا می‌شود؛ وگرنه فقط اسم را انتخاب کنید و «ثبت همه» را بزنید.</p>
+ return `<div class="c scn"><h3>📄 اسکن کارنامه‌ی ماز و قلم‌چی</h3><p class="m">PDF یا عکس کارنامه‌ها را یک‌جا انتخاب کنید (هر تعداد). مؤسسه، تاریخ و اعداد خودکار خوانده می‌شود. اسم دانش‌آموز از روی خود کارنامه (قلم‌چی) و نام فایل خوانده و با فهرست شما تطبیق داده می‌شود (حتی اگر نام و نام‌خانوادگی جابه‌جا یا غلط باشد). برای ماز، عکس نام کارنامه هم نشان داده می‌شود. اگر تطبیق مطمئن نبود، یکی از پیشنهادها را بزنید.</p>
  <input type="file" id="fi" multiple accept="application/pdf,image/*" onchange="pick(this)"></div>
  ${FILES.map(f=>fcard(f)).join('')}
  ${FILES.some(f=>f.st==='ok'&&!f.done)?`<div class="tb" style="margin-top:10px"><button class="btn p" onclick="commitAll()">ثبت همه‌ی آماده‌ها</button><button class="btn" onclick="FILES=[];draw()">پاک‌کردن لیست</button></div>`:FILES.length?`<div class="tb" style="margin-top:10px"><button class="btn" onclick="FILES=[];draw()">پاک‌کردن لیست</button></div>`:''}`}
@@ -225,7 +229,7 @@ function fcard(f:FI){
  if(f.done)return `<div class="c fc" style="margin-top:10px;border-color:var(--ok)"><div class="tb" style="margin:0"><span style="flex:1">✅ <b>${esc(D.students.find(s=>s.id===f.sid)?.name||'')}</b> · ${esc(x.title)} · تراز ${n(x.level)}</span><button class="btn" onclick="X_open('${f.sid}','${f.eid||''}')">دیدن کارنامه</button></div></div>`;
  const free=D.students;
  return `<div class="c fc" style="margin-top:10px"><div class="tb"><b>${esc(f.file.name)}</b><span class="tag">${esc(x.institute)}</span><button class="btn" style="margin-inline-start:auto" onclick="rmf(${f.id})">حذف</button></div>
- <div class="tb"><select onchange="sfs(${f.id},this.value)"><option value="">انتخاب دانش‌آموز…</option>${['تجربی ۳۲۱','تجربی ۳۲۲','ریاضی ۳۱۱'].map(c=>`<optgroup label="${c}">${free.filter(s=>s.cls===c).map(s=>`<option value="${s.id}" ${f.sid===s.id?'selected':''}>${esc(s.name)}</option>`).join('')}</optgroup>`).join('')}</select>
+ ${detHtml(f)}<div class="tb"><select onchange="sfs(${f.id},this.value)"><option value="">انتخاب دانش‌آموز…</option>${['تجربی ۳۲۱','تجربی ۳۲۲','ریاضی ۳۱۱'].map(c=>`<optgroup label="${c}">${free.filter(s=>s.cls===c).map(s=>`<option value="${s.id}" ${f.sid===s.id?'selected':''}>${esc(s.name)}</option>`).join('')}</optgroup>`).join('')}</select>
  <input value="${esc(x.title)}" onchange="FILES.find(q=>q.id==${f.id}).x.title=this.value" placeholder="عنوان"><input value="${x.date}" style="width:110px" onchange="FILES.find(q=>q.id==${f.id}).x.date=this.value.trim()" placeholder="1405/07/10">
  <label class="m">تراز کل <input type="number" value="${x.level??''}" style="width:80px" onchange="FILES.find(q=>q.id==${f.id}).x.level=this.value===''?null:+this.value"></label>
  <label class="m">رتبه <input type="number" value="${x.countryRank??''}" style="width:90px" onchange="FILES.find(q=>q.id==${f.id}).x.countryRank=this.value===''?null:+this.value"></label></div>
@@ -486,11 +490,10 @@ async function xpng(){const sv=U.sv&&D.students.find(s=>s.id===U.sv&&s.cls===U.x
  const img=new Image();img.onload=()=>{const k=2,cv=document.createElement('canvas');cv.width=img.width*k;cv.height=img.height*k;const c=cv.getContext('2d');c.scale(k,k);c.drawImage(img,0,0);cv.toBlob(b=>saveFile(`${U.xc}-${sv?nm(sv)+'-':''}هفته.png`,b),'image/png')};
  img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg)}
 const SV=mkServer({get D(){return D},annActive:()=>annActive(),toast,letterC,bg:()=>bgDraw(),sexams,save,draw:()=>draw(),esc,n,saveFile,ensureEx,tt,status,letter,dateOf,wk0,commit:(f:any)=>commit(f),CFG,U});
-const PLA=mkPlanAdmin({get D(){return D},U,save,draw:()=>draw(),esc,n,toast});
-const EX=mkExams({get D(){return D},U,save,draw:()=>draw(),bg:()=>bgDraw(),plan:()=>PLA.page(),esc,n,n1,avg,line,hue,spark,CL,byNum,today,SV,scn,schp:()=>schp(),FILES:()=>FILES,dlf:(...a:any[])=>(dlf as any)(...a),toast});
+const EX=mkExams({get D(){return D},U,save,draw:()=>draw(),bg:()=>bgDraw(),esc,n,n1,avg,line,hue,spark,CL,byNum,today,SV,scn,schp:()=>schp(),FILES:()=>FILES,dlf:(...a:any[])=>(dlf as any)(...a),toast});
 const AT2=mkAttend({get D(){return D},U,letterC,bg:()=>bgDraw(),esc,n,save,draw:()=>draw(),toast,dateOf,wk0,mid,DAYN,GL,GC,CL,letter,status,subj,byNum,SV,dlf:(...a:any[])=>(dlf as any)(...a),bars,op,sf});
 AP=SV.autoPub;
-Object.assign(W,SV.h,EX.h,AT2.h,PLA.h);
+Object.assign(W,SV.h,EX.h,AT2.h);
 SV.init();
 /* ---------- آزمون‌های مدرسه (فقط نمره‌ی هر درس؛ بدون معدل) ---------- */
 function mkSch(t:string,date:string,c:string){const ls=[...new Set(tt(c).flat().filter(Boolean))].map((name:string)=>({name,max:20}));const id='h'+Date.now().toString(36);ensureSch().exams.push({id,title:t,date,cls:c,lessons:ls,sc:{}});U.sx=id;save()}

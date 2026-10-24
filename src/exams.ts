@@ -31,8 +31,8 @@ export function mkExams(A: any) {
   function page() {
     if (!X.tab) X.tab = defaultTab();
     refresh(false);
-    const p = pend(), T = [['in', '📥 دریافت کارنامه' + (p ? ` <i class="bdg" style="display:inline-grid;margin:0 4px">${n(p)}</i>` : '')], ['ex', '📋 نتایج هر آزمون'], ['st', '👤 نتایج هر دانش‌آموز'], ['pl', '📅 برنامه‌ی آزمون‌ها'], ['mg', '🗂 مدیریت آزمون‌ها'], ['sch', '🏫 مدرسه']];
-    const body: any = { in: receive, ex: byExam, st: byStu, pl: () => A.plan(), mg: manage, sch: () => A.schp() };
+    const p = pend(), T = [['in', '📥 دریافت کارنامه' + (p ? ` <i class="bdg" style="display:inline-grid;margin:0 4px">${n(p)}</i>` : '')], ['ex', '📋 نتایج هر آزمون'], ['st', '👤 نتایج هر دانش‌آموز'], ['mg', '🗂 مدیریت آزمون‌ها'], ['sch', '🏫 مدرسه']];
+    const body: any = { in: receive, ex: byExam, st: byStu, mg: manage, sch: () => A.schp() };
     return `<div class="seg xtabs">${T.map(([k, t]) => `<button class="${X.tab === k ? 'on' : ''}" onclick="X_('tab','${k}')">${t}</button>`).join('')}</div>${(body[X.tab] || byExam)()}`;
   }
 

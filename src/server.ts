@@ -2,6 +2,7 @@
 import { sb, cfgOk } from './supa';
 import { inboxGet, inboxSet } from './store';
 import { importReport } from './scan';
+import { matchStudents } from './scan/nameMatch';
 import { j2iso, iso2j, daysLeft, isoToday, jlen, jfirst } from './ui';
 
 const idb = (mode: IDBTransactionMode, f: (s: IDBObjectStore) => IDBRequest) => new Promise<any>((res, rej) => {
@@ -129,9 +130,12 @@ export function mkServer(A: any) {
 
   /* ---- inbox ---- */
   function cmp(r: any, x: any) {
+    const lid0 = lidOf(r.student_id), st0 = lid0 ? stu(lid0) : null, nm0 = x.detected?.source === 'pdf' ? x.detected.name : '';
+    const nameBad = !!(st0 && nm0 && (matchStudents([nm0], [{ id: 'x', name: st0.name }])[0]?.score || 0) < 0.6);
     const a = (r.raw || []).map((o: any) => [o.c, o.w, o.b].join(',')).sort().join('|'), b = x.rows.map((o: any) => [o.c, o.w, o.n - o.c - o.w].join(',')).sort().join('|'), why: string[] = [];
     if (x.level !== r.level) why.push(`تراز: ارسالی ${r.level} / خوانش سیستم ${x.level}`);
     if (a !== b) why.push('تعداد درست/غلط/نزده‌ی دروس با خوانش سیستم فرق دارد');
+    if (nameBad) why.push(`نام روی کارنامه («${nm0}») با نام دانش‌آموز نمی‌خواند`);
     return { ok: !why.length, why, exam: x };
   }
   async function fetchInbox() {
@@ -195,8 +199,6 @@ export function mkServer(A: any) {
     });
     S.annErr = '';
     try { await syncAnn(); } catch (e: any) { S.annErr = 'اطلاعیه‌ها منتشر نشد: ' + (e.message || e) + ' — فایل‌های supabase/update-3.sql و update-4.sql را اجرا کنید.'; }
-    S.planErr = '';
-    try { if (A.D.plan) await up('exam_plan', [{ id: 'main', data: A.D.plan }], 'id'); } catch (e: any) { S.planErr = 'برنامه‌ی آزمون‌ها منتشر نشد: ' + (e.message || e) + ' — فایل supabase/update-11.sql را اجرا کنید.'; }
     S.schErr = '';
     try { await up('school_pub', sch, 'student_id,exam_key'); } catch (e: any) { S.schErr = 'نمره‌های مدرسه منتشر نشد: ' + (e.message || e) + ' — فایل supabase/update-2.sql را اجرا کنید.'; }
     await sb.from('calendar_pub').delete().lt('week_start', A.dateOf(w0, 0).toISOString().slice(0, 10));
@@ -253,7 +255,7 @@ export function mkServer(A: any) {
   // وضعیت همگام‌سازی خودکار با پنل دانش‌آموزان
   const pub = () => {
     const a = S.auto || {}, st = a.st === 'wait' ? '⏳ در حال همگام‌سازی…' : a.st === 'err' ? '⚠ همگام‌سازی ناموفق' : a.st === 'ok' ? `✅ همه‌چیز برای دانش‌آموزان به‌روز است (${a.at})` : '🔄 خودکار';
-    return `<div class="c np" style="margin-bottom:10px"><div class="tb" style="margin:0"><div style="flex:1;min-width:200px"><b>${st}</b><div class="m">معافیت‌ها، نتایج آزمون، اطلاعیه‌ها و نمرات بعد از هر تغییر خودکار برای دانش‌آموزان به‌روز می‌شود؛ نیازی به «انتشار» نیست.</div>${a.st === 'err' ? `<div class="dn">${esc(a.msg)}</div>` : ''}${S.schErr ? `<div class="dn">${esc(S.schErr)}</div>` : ''}${S.annErr ? `<div class="dn">${esc(S.annErr)}</div>` : ''}${S.planErr ? `<div class="dn">${esc(S.planErr)}</div>` : ''}</div><button class="btn" onclick="srvPub()" title="اگر شک دارید، همه‌چیز را دوباره بفرستید">🔄 ارسال مجدد همه</button></div></div>`;
+    return `<div class="c np" style="margin-bottom:10px"><div class="tb" style="margin:0"><div style="flex:1;min-width:200px"><b>${st}</b><div class="m">معافیت‌ها، نتایج آزمون، اطلاعیه‌ها و نمرات بعد از هر تغییر خودکار برای دانش‌آموزان به‌روز می‌شود؛ نیازی به «انتشار» نیست.</div>${a.st === 'err' ? `<div class="dn">${esc(a.msg)}</div>` : ''}${S.schErr ? `<div class="dn">${esc(S.schErr)}</div>` : ''}${S.annErr ? `<div class="dn">${esc(S.annErr)}</div>` : ''}</div><button class="btn" onclick="srvPub()" title="اگر شک دارید، همه‌چیز را دوباره بفرستید">🔄 ارسال مجدد همه</button></div></div>`;
   };
   function page() {
     if (!cfgOk) return `<div class="c"><h3>اتصال به سرور تنظیم نشده</h3><p>فایل <code dir="ltr">src/config.ts</code> را با آدرس و کلید عمومی پروژه‌ی Supabase پر کنید (راهنما: SETUP.md).</p></div>`;
