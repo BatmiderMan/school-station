@@ -1,7 +1,7 @@
 // پنل دانش‌آموز: ورود، تقویم معافیت، آزمون‌ها، ارسال کارنامه
 import './style.css';
 import { ic, initUi, annHtml, daysLeft, toast } from './ui';
-import { sb, cfgOk } from './supa';
+import { sb, cfgOk, authErrText } from './supa';
 import { initPwa } from './pwa';
 import { importReport, ExamSettings } from './scan';
 import { mkAttGrid } from './attgrid';
@@ -35,7 +35,7 @@ async function login() {
   T.busy = true; T.login = ''; draw();
   const { data, error } = await sb.auth.signInWithPassword({ email: `${u}@school.example`, password: p });
   T.busy = false;
-  if (error) { T.login = 'نام کاربری یا رمز اشتباه است.'; draw(); return; }
+  if (error) { T.login = authErrText(error, 'نام کاربری یا رمز اشتباه است.'); draw(); return; }
   T.u = data.user; await load(); draw();
 }
 async function logout() { await sb.auth.signOut(); T.u = null; T.me = null; T.p = 'home'; draw(); }

@@ -1,5 +1,5 @@
 // صفحه‌ی ورود پیش از برنامه: تا مدیر وارد نشده باشد، خودِ پنل نمایش داده نمی‌شود.
-import { sb } from './supa';
+import { sb, authErrText } from './supa';
 
 const $ = (id: string) => document.getElementById(id) as any;
 export const lock = (on: boolean) => document.body.classList.toggle('locked', on);
@@ -18,7 +18,7 @@ export function gateLogin(): Promise<void> {
     $('gf').addEventListener('submit', async (e: Event) => {
       e.preventDefault(); if (done) return; const b = $('gb'); b.disabled = true; gateMsg('در حال ورود…');
       const { error } = await sb.auth.signInWithPassword({ email: $('ge').value.trim(), password: $('gp').value });
-      if (error) { b.disabled = false; gateMsg('ایمیل یا رمز اشتباه است.', true); return; }
+      if (error) { b.disabled = false; gateMsg(authErrText(error, 'ایمیل یا رمز اشتباه است.'), true); return; }
       const m = await isManager(); b.disabled = false;
       if (m !== true) { await sb.auth.signOut(); gateMsg(m === false ? 'این حساب در جدول managers نیست.' : 'اتصال به سرور برقرار نشد.', true); return; }
       $('gp').value = ''; ok();
