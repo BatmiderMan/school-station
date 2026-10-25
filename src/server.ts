@@ -17,13 +17,15 @@ const kvSet = async (k: string, v: any): Promise<boolean> => {
   try { if (cfgOk && k === 'inbox') await inboxSet(v); else await idb('readwrite', (s) => s.put(v, k)); return true; }
   catch (e: any) { (window as any).alert('ذخیره‌ی صندوق ورودی ناموفق بود: ' + (e?.message || e)); return false; }
 };
-const CODE: any = { 'تجربی ۳۲۱': '321', 'تجربی ۳۲۲': '322', 'ریاضی ۳۱۱': '311' }; // کد کلاس
+const CODE: any = { 'ریاضی ۳۱۱': '311', 'تجربی ۳۲۱': '321', 'تجربی ۳۲۲': '322' }; // کد کلاس
 const rnd = (k: number) => { const a = 'abcdefghjkmnpqrstuvwxyz23456789'; return Array.from(crypto.getRandomValues(new Uint8Array(k)), (x) => a[x % a.length]).join(''); };
 const b2f = (b: string, t: string) => { const s = atob(b), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return new File([u], 'sub.' + (t.includes('pdf') ? 'pdf' : 'jpg'), { type: t }); };
 const pad2 = (x: number) => String(x).padStart(2, '0');
 
 export function mkServer(A: any) {
   const esc = A.esc, n = A.n;
+  const classOrder = (cl: string) => { const i = A.CL.indexOf(cl); return i < 0 ? A.CL.length : i; };
+  const byClass = (a: any, b: any) => classOrder(a.cls) - classOrder(b.cls) || (a.num || 1e9) - (b.num || 1e9);
   const S: any = { cons: [], ct: 'new', cform: '', consErr: '', dr: {}, user: null, mgr: null, tab: 'acc', msg: '', busy: false, inbox: [], creds: null };
   const sd = () => (A.D.srv = A.D.srv || { accounts: {}, firstOnly: true });
   const draw = () => A.draw();
@@ -78,7 +80,7 @@ export function mkServer(A: any) {
     try { S.creds = [await create(lid, d.u, d.p)]; delete S.dr[lid]; say('ساخته شد؛ نام کاربری و رمز را همین حالا به دانش‌آموز بدهید (رمز بعداً قابل مشاهده نیست).'); } catch (e: any) { say('خطا: ' + e.message); }
   }
   async function bulk() {
-    const todo = A.D.students.filter((s: any) => !sd().accounts[s.id]).sort((a: any, b: any) => a.cls.localeCompare(b.cls, 'fa') || (a.num || 1e9) - (b.num || 1e9));
+    const todo = A.D.students.filter((s: any) => !sd().accounts[s.id]).sort(byClass);
     if (!todo.length) { say('همه حساب دارند.'); return; }
     if (!confirm(`برای ${n(todo.length)} دانش‌آموز با همین نام کاربری و رمزهای جدول حساب ساخته شود؟`)) return;
     const out: any[] = [], bad: string[] = [];
@@ -200,7 +202,20 @@ export function mkServer(A: any) {
     S.annErr = '';
     try { await syncAnn(); } catch (e: any) { S.annErr = 'اطلاعیه‌ها منتشر نشد: ' + (e.message || e) + ' — فایل‌های supabase/update-3.sql و update-4.sql را اجرا کنید.'; }
     S.schErr = '';
-    try { await up('school_pub', sch, 'student_id,exam_key'); } catch (e: any) { S.schErr = 'نمره‌های مدرسه منتشر نشد: ' + (e.message || e) + ' — فایل supabase/update-2.sql را اجرا کنید.'; }
+    try {
+      await up('school_pub', sch, 'student_id,exam_key');
+      // حذف آزمون یا آخرین نمره باید از پنل دانش‌آموز هم برداشته شود.
+      const studentIds = list.map((l) => acc[l].sid), wanted = new Set(sch.map((r) => `${r.student_id}|${r.exam_key}`));
+      if (studentIds.length) {
+        const { data: old, error } = await sb.from('school_pub').select('student_id,exam_key').in('student_id', studentIds);
+        if (error) throw error;
+        for (const row of old || []) if (!wanted.has(`${row.student_id}|${row.exam_key}`)) {
+          const { error: delError } = await sb.from('school_pub').delete().eq('student_id', row.student_id).eq('exam_key', row.exam_key);
+          if (delError) throw delError;
+          delete lastSig[`school_pub|${row.student_id}|${row.exam_key}`];
+        }
+      }
+    } catch (e: any) { S.schErr = 'نمره‌های مدرسه منتشر نشد: ' + (e.message || e) + ' — فایل supabase/update-2.sql را اجرا کنید.'; }
     await sb.from('calendar_pub').delete().lt('week_start', A.dateOf(w0, 0).toISOString().slice(0, 10));
     S.last = { n: list.length, ex: ex.length, at: new Date().toLocaleTimeString('fa-IR') };
   }
@@ -232,7 +247,7 @@ export function mkServer(A: any) {
   const tabs = () => '';
   const tabsOld = () => `<div class="seg">${[['acc', '👤 حساب دانش‌آموزان']].map(([k, t]) => `<button class="${S.tab === k ? 'on' : ''}" onclick="srvTab('${k}')">${t}</button>`).join('')}</div>`;
   function acc() {
-    const ss = [...A.D.students].sort((a: any, b: any) => a.cls.localeCompare(b.cls, 'fa') || (a.num || 1e9) - (b.num || 1e9));
+    const ss = [...A.D.students].sort(byClass);
     const creds = S.creds ? `<div class="c" style="border-color:var(--ok)"><h3>🔑 اطلاعات ورود (فقط همین‌جا دیده می‌شود)</h3><div class="tw"><table><thead><tr><th>نام</th><th>کلاس</th><th>نام کاربری</th><th>رمز</th></tr></thead><tbody>${S.creds.map((c: any) => `<tr style="cursor:default"><td>${esc(c.name)}</td><td>${c.cls}</td><td dir="ltr">${esc(c.user)}</td><td dir="ltr"><b>${esc(c.pass)}</b></td></tr>`).join('')}</tbody></table></div><div class="tb" style="margin-top:8px"><button class="btn p" onclick="srvCsv()">دانلود CSV</button><button class="btn" onclick="window.print()">چاپ</button><button class="btn" onclick="S_.creds=null;draw()">بستن</button></div></div>` : '';
     return creds + `<div class="np"><div class="tb"><label><input type="checkbox" ${sd().firstOnly ? 'checked' : ''} onchange="srvFirst(this.checked)"> فقط نام کوچک روی سرور (حریم خصوصی)</label><button class="btn p" onclick="srvBulk()">ساخت حساب برای همه‌ی بدون حساب</button>${Object.keys(sd().accounts).length ? `<button class="btn" style="color:var(--bad)" onclick="srvDelAll()">🗑 حذف همه‌ی حساب‌ها</button>` : ''}</div>
     <div class="c tw"><table><thead><tr><th>دانش‌آموز</th><th>کلاس</th><th>نام کاربری</th><th>رمز / نقش</th><th></th></tr></thead><tbody>${ss.map((s: any) => { const a = sd().accounts[s.id];

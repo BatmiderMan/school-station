@@ -16,6 +16,11 @@ const SUBJ = ['ریاضی', 'فیزیک', 'شیمی', 'زیست', 'ادبیات'
 const CFG: ExamSettings = { sections: SUBJ.map((name, i) => ({ id: 'u' + i, name, color: '#888', n: 0, parts: [] })) };
 const T: any = { con: [], ann: [], xi: 'ماز', sch: [], u: null, me: null, exams: [], cal: [], pend: 0, p: 'home', wi: null, open: null, prev: null, err: '', busy: false, ok: '', login: '', rc: [], rw: 0, rd: 0, rerr: '', ab: [], at: null, atErr: '', ae: {}, ab0: {}, atBusy: false, ap: 0 };
 const W: any = window;
+const P = [['home', 'خانه', 'home'], ['ann', 'اطلاعیه‌ها', 'bell'], ['con', 'وقت مشاوره', 'chat'], ['cal', 'تقویم معافیت', 'cal'], ['abs', 'غیبت‌های من', 'att'], ['rat', 'حضور و غیاب کلاس', 'clip'], ['rcal', 'تقویم معافیت کلاس', 'users'], ['exm', 'آزمون‌ها', 'clip'], ['send', 'ارسال کارنامه', 'up']];
+const studentPages = () => P.filter(([k]) => T.me?.is_rep || (k !== 'rat' && k !== 'rcal'));
+function closeStudentMenu() { const menu = $('#student-menu'); menu.hidden = true; $('#student-more')?.setAttribute('aria-expanded', 'false'); }
+function toggleStudentMenu() { const menu = $('#student-menu'); menu.hidden = !menu.hidden; $('#student-more')?.setAttribute('aria-expanded', String(!menu.hidden)); }
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeStudentMenu(); });
 const jdate = (iso: string, o: any = { day: 'numeric', month: 'long' }) => new Date(iso + 'T12:00:00').toLocaleDateString('fa-IR', o);
 const todayIso = () => { const t = new Date(), p = (x: number) => String(x).padStart(2, '0'); return `${t.getFullYear()}-${p(t.getMonth() + 1)}-${p(t.getDate())}`; };
 
@@ -63,14 +68,18 @@ async function load() {
 function draw() {
   document.body.classList.toggle('guest', !T.me);
   $('#who').textContent = T.me ? T.me.name : 'پنل دانش‌آموز';
-  if (!T.me) { $('#nv').innerHTML = ''; $('#pt').textContent = 'ورود'; $('#app').innerHTML = loginView(); return; }
-  const P = [['home', 'خانه', 'home'], ['ann', 'اطلاعیه‌ها', 'bell'], ['con', 'وقت مشاوره', 'chat'], ['cal', 'تقویم معافیت', 'cal'], ['abs', 'غیبت‌های من', 'att'], ...(T.me.is_rep ? [['rat', 'حضور و غیاب کلاس', 'clip'], ['rcal', 'تقویم معافیت کلاس', 'users']] : []), ['exm', 'آزمون‌ها', 'clip'], ['send', 'ارسال کارنامه', 'up']];
-  $('#nv').innerHTML = P.map(([k, t, i]) => `<button class="${T.p === k ? 'on' : ''}" onclick="go('${k}')" aria-label="${t}">${ic(i)}<span>${t}</span>${k === 'ann' && T.ann.length ? `<em class="bdg">${T.ann.length.toLocaleString('fa-IR')}</em>` : ''}${k === 'con' && upcoming().length ? `<em class="bdg" style="background:var(--ok)">${upcoming().length.toLocaleString('fa-IR')}</em>` : ''}</button>`).join('');
-  $('#pt').textContent = (P.find((p) => p[0] === T.p) || ['', ''])[1];
+  if (!T.me) { $('#nv').innerHTML = ''; $('#student-mobile-nav').innerHTML = ''; closeStudentMenu(); $('#pt').textContent = 'ورود'; $('#app').innerHTML = loginView(); return; }
+  const pages = studentPages();
+  $('#nv').innerHTML = pages.map(([k, t, i]) => `<button class="${T.p === k ? 'on' : ''}" onclick="go('${k}')" aria-label="${t}">${ic(i)}<span>${t}</span>${k === 'ann' && T.ann.length ? `<em class="bdg">${T.ann.length.toLocaleString('fa-IR')}</em>` : ''}${k === 'con' && upcoming().length ? `<em class="bdg" style="background:var(--ok)">${upcoming().length.toLocaleString('fa-IR')}</em>` : ''}</button>`).join('');
+  const quick = ['home', 'cal', T.me.is_rep ? 'rat' : 'abs', 'exm'];
+  const quickPages = pages.filter(([k]) => quick.includes(k)).sort((a, b) => quick.indexOf(a[0]) - quick.indexOf(b[0]));
+  $('#student-mobile-nav').innerHTML = quickPages.map(([k, t, i]) => `<button type="button" class="${T.p === k ? 'on' : ''}" onclick="go('${k}')" ${T.p === k ? 'aria-current="page"' : ''}>${ic(i)}<span>${k === 'rat' ? 'حضور کلاس' : k === 'cal' ? 'تقویم' : k === 'abs' ? 'غیبت‌ها' : t}</span></button>`).join('') + `<button type="button" id="student-more" class="${quick.includes(T.p) ? '' : 'on'}" onclick="toggleStudentMenu()" aria-expanded="${!$('#student-menu').hidden}" aria-controls="student-menu"><span class="student-more-icon" aria-hidden="true">☰</span><span>بیشتر</span></button>`;
+  $('#student-menu-links').innerHTML = pages.map(([k, t, i]) => `<button type="button" class="${T.p === k ? 'on' : ''}" onclick="go('${k}')" ${T.p === k ? 'aria-current="page"' : ''}>${ic(i)}<span>${t}</span>${k === 'ann' && T.ann.length ? `<em class="bdg">${T.ann.length.toLocaleString('fa-IR')}</em>` : ''}${k === 'con' && upcoming().length ? `<em class="bdg">${upcoming().length.toLocaleString('fa-IR')}</em>` : ''}</button>`).join('');
+  $('#pt').textContent = (pages.find((p) => p[0] === T.p) || ['', ''])[1];
   const a = $('#app'); a.classList.remove('in'); void a.offsetWidth; a.classList.add('in');
   a.innerHTML = ({ home, ann, con, cal, rcal, exm, send, abs, rat } as any)[T.p]();
 }
-const go = (p: string) => { T.p = p; T.ok = ''; T.err = ''; draw(); window.scrollTo(0, 0); };
+const go = (p: string) => { closeStudentMenu(); T.p = p; T.ok = ''; T.err = ''; draw(); window.scrollTo(0, 0); };
 function loginView() {
   if (!cfgOk) return `<div class="c">اتصال به سرور تنظیم نشده است.</div>`;
   if (T.u) return `<div class="c">حساب شما هنوز به دانش‌آموزی متصل نشده. با مدیر مدرسه تماس بگیرید.<div class="tb" style="margin-top:8px"><button class="btn" onclick="logout()">خروج</button></div></div>`;
@@ -270,5 +279,5 @@ async function submitIt() {
 
 initUi();
 initPwa();
-Object.assign(W, { conSend, conCancel, T, draw, go, login, logout, pick, submitIt });
+Object.assign(W, { conSend, conCancel, T, draw, go, login, logout, pick, submitIt, closeStudentMenu, toggleStudentMenu });
 boot();

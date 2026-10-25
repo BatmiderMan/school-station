@@ -263,3 +263,43 @@ details.c>summary::-webkit-details-marker{display:none}
 .exnote{border-inline-start:5px solid #7c3aed;font-size:13px;line-height:1.8}
 
 .ncrop{max-width:100%;border-radius:10px;border:1px solid var(--bd);margin:4px 0 8px;display:block}
+
+/* ===== دفتر تماس با والدین ===== */
+.call-hero{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 22px;margin-bottom:12px;border-radius:24px;background:linear-gradient(125deg,#0f766e,#2563a6 62%,#4338ca);color:#fff;box-shadow:0 16px 28px -17px #0f766e}
+.call-hero h2{margin:2px 0 4px;color:#fff;font-size:23px}.call-hero p{margin:0;opacity:.9;font-size:13px}.call-hero small{opacity:.84}
+.call-hero .btn{background:#ffffff25;border-color:#ffffff55;color:#fff;white-space:nowrap}.call-hero .btn:hover{background:#ffffff3a}
+.call-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:12px}.call-kpis .k{border-top:4px solid var(--ac)}.call-kpis .k:nth-child(2){border-top-color:#f59e0b}.call-kpis .k:nth-child(3){border-top-color:#10b981}.call-kpis .k:nth-child(4){border-top-color:#dc2626}
+.call-form{margin-bottom:12px}.call-fields{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:10px}.call-fields-wide{grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr)}
+.call-fields label,.call-full{display:flex;flex-direction:column;gap:5px;min-width:0;font-size:12px;font-weight:700;color:var(--mut)}.call-fields input,.call-fields select,.call-full textarea{width:100%;color:var(--tx)}.call-full textarea{min-height:82px}
+.call-filter{margin:16px 0}.call-month{margin:18px 0 24px}.call-month h3{display:flex;align-items:baseline;gap:10px;margin:0 0 10px}.call-month h3 .m{font-size:12px;font-weight:400}
+.call-card{display:flex;gap:12px;padding:15px;margin-bottom:9px;background:var(--card);border:1px solid var(--bd);border-inline-start:5px solid var(--call-color);border-radius:18px;box-shadow:var(--sh)}
+.call-icon{flex:none;width:43px;height:43px;display:grid;place-items:center;border-radius:14px;background:color-mix(in srgb,var(--call-color) 15%,var(--card));font-size:21px}.call-main{flex:1;min-width:0}.call-top{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}.call-top b{font-size:16px}.call-top .m{font-size:12px}
+.call-tags{display:flex;flex-wrap:wrap;gap:5px;margin:8px 0}.call-tags .tag{margin:0}.call-reason,.call-note{margin:6px 0;white-space:pre-wrap;overflow-wrap:anywhere}.call-note{color:var(--mut)}.call-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.call-actions .btn{padding:5px 10px;font-size:12px;text-decoration:none}
+@media(max-width:760px){.call-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.call-fields{grid-template-columns:repeat(2,minmax(0,1fr))}.call-fields-wide{grid-template-columns:1fr}.call-hero{align-items:flex-start;flex-direction:column}.call-card{padding:12px}}
+@media(max-width:460px){.call-fields{grid-template-columns:1fr}.call-hero h2{font-size:20px}.call-icon{width:36px;height:36px;font-size:18px}}
+
+/* Student navigation on phones and tablets */
+#student-mobile-nav,#student-menu{display:none}
+@media (max-width:900px){
+ html[data-app="student"] #rail{display:none}
+ html[data-app="student"] main{padding-bottom:calc(110px + env(safe-area-inset-bottom,0px))}
+ html[data-app="student"] #credit{padding-bottom:calc(104px + env(safe-area-inset-bottom,0px))!important}
+ html[data-app="student"] #student-mobile-nav{position:fixed;z-index:30;inset-inline:10px;bottom:calc(8px + env(safe-area-inset-bottom,0px));display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:2px;padding:5px;background:color-mix(in srgb,var(--card) 94%,transparent);border:1px solid var(--bd);border-radius:22px;box-shadow:0 14px 38px #0004;backdrop-filter:blur(16px)}
+ html[data-app="student"] #student-mobile-nav button{min-width:0;min-height:58px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:4px 1px;border:0;border-radius:17px;background:none;color:var(--mut);font-size:10px;font-weight:700;line-height:1.35;white-space:nowrap;cursor:pointer}
+ html[data-app="student"] #student-mobile-nav button svg{width:21px;height:21px}
+ html[data-app="student"] #student-mobile-nav button.on{background:var(--acs);color:var(--ac)}
+ .student-more-icon{font-size:23px;line-height:21px;font-weight:400}
+ html[data-app="student"] #student-menu:not([hidden]){display:block;position:fixed;z-index:35;inset:0}
+ .student-menu-backdrop{position:absolute;inset:0;width:100%;border:0;background:#0008;cursor:pointer}
+ .student-menu-panel{position:absolute;inset-inline:0;bottom:0;max-height:min(82dvh,680px);overflow-y:auto;padding:16px 16px calc(20px + env(safe-area-inset-bottom,0px));border-radius:24px 24px 0 0;background:var(--card);box-shadow:0 -16px 40px #0004}
+ .student-menu-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;font-size:17px}
+ .student-menu-head .ib{width:34px;height:34px}
+ #student-menu-links{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ #student-menu-links button{position:relative;display:flex;align-items:center;gap:9px;min-height:56px;padding:9px 11px;border:1px solid var(--bd);border-radius:14px;background:var(--card2);text-align:right;cursor:pointer}
+ #student-menu-links button svg{flex:none;width:20px;height:20px;color:var(--ac)}
+ #student-menu-links button span{min-width:0;line-height:1.4;font-size:12px;font-weight:650}
+ #student-menu-links button.on{border-color:var(--ac);background:var(--acs);color:var(--ac)}
+ #student-menu-links .bdg{position:static;margin-inline-start:auto;flex:none}
+ .student-menu-logout{width:100%;margin-top:12px;padding:11px;border:1px solid var(--bd);border-radius:13px;background:var(--card2);color:var(--bad);cursor:pointer}
+ html[data-app="student"] body.guest #student-mobile-nav{display:none}
+}

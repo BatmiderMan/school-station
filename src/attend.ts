@@ -19,6 +19,9 @@ export function mkAttend(A: any) {
   const tag = (t: string, bg?: string) => `<span class="tag" ${bg ? `style="background:${bg};color:#fff;border-color:${bg}"` : ''}>${t}</span>`;
   const errMsg = (e: any) => (/attendance|att_|function/i.test(e?.message || '') && /does not exist|find|schema|could not/i.test(e?.message || '') ? 'فایل supabase/update-9.sql هنوز روی سرور اجرا نشده است.' : e?.message || String(e));
   const todayIso = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Tehran' });
+  const periodNoteKey = (day: string, cl: string, period: number) => `${day}|${cl}|${period}`;
+  const periodNotes = () => (D().dayNotes || {}) as Record<string, { note: string; w: number; d: number; cl: string; period: number }>;
+  const noteDrafts: Record<string, string> = {};
 
   /* ---------- روز انتخاب‌شده ---------- */
   function initDay() {
@@ -71,7 +74,7 @@ export function mkAttend(A: any) {
       const note = N.find((q: any) => q.student_id === x.sid);
       abs.push({ ...x, cl: c.cl, rows: mine, periods: mine.map((r: any) => r.period).sort((a: number, b: number) => a - b), full: mine.some((r: any) => r.status === 'absent'), note: note?.note || '', called: !!note?.called }); }));
     const needs = (a: any) => !a.note && !a.called;
-    abs.sort((x, y) => (needs(y) ? 1 : 0) - (needs(x) ? 1 : 0) || x.cl.localeCompare(y.cl, 'fa'));
+    abs.sort((x, y) => (needs(y) ? 1 : 0) - (needs(x) ? 1 : 0) || A.CL.indexOf(x.cl) - A.CL.indexOf(y.cl));
     const exemptCount = classes.reduce((t: number, c: any) => t + c.ss.filter((x: any) => x.cells.some((q: any) => q.ex)).length, 0);
     const total = classes.length * per, done = classes.reduce((t: number, c: any) => t + c.sessions.filter(Boolean).length, 0);
     const absSt = new Set(R.filter((r: any) => r.status === 'absent').map((r: any) => r.student_id)), lateSt = new Set(R.filter((r: any) => r.status === 'late' && !absSt.has(r.student_id)).map((r: any) => r.student_id));
@@ -140,9 +143,13 @@ export function mkAttend(A: any) {
     rows: () => { const M = model(), c = M.classes.find((x: any) => x.cl === curCl()); return c ? c.ss.map((x: any) => ({ id: x.sid || x.s.id, name: x.s.name, ok: !!x.sid, cells: x.cells.map((q: any, i: number) => ({ s: A.subj(c.cl, M.d, i), t: q.ex || null })) })) : []; },
     done: () => { const M = model(), c = M.classes.find((x: any) => x.cl === curCl()); return c ? c.sessions.map((q: any, i: number) => (q ? i + 1 : 0)).filter(Boolean) : []; },
     ed: edsOf, base: baseOf,
-    note: (ap: number) => { const M = model(), c = M.classes.find((x: any) => x.cl === curCl()), q = c?.sessions[ap - 1]; if (!q) return `<div class="c" style="margin-bottom:10px;border-inline-start:5px solid #94a3b8">⚪ این زنگ هنوز ثبت نشده است؛ می‌توانید همین‌جا حضور و غیابش را ثبت کنید.</div>`;
-      const who = q.by_role === 'admin' ? 'مدیر' : (D().students.find((x: any) => acc()[x.id]?.sid === q.marked_by)?.name ? 'نماینده (' + D().students.find((x: any) => acc()[x.id]?.sid === q.marked_by).name + ')' : 'نماینده');
-      return `<div class="c" style="margin-bottom:10px;border-inline-start:5px solid var(--ok)">✅ این زنگ ساعت <b>${hhmm(q.marked_at)}</b> توسط <b>${esc(who)}</b> ثبت شده است.</div>`; },
+    note: (ap: number) => { const M = model(), c = M.classes.find((x: any) => x.cl === curCl()), q = c?.sessions[ap - 1];
+      const status = !q ? `<div class="c" style="margin-bottom:10px;border-inline-start:5px solid #94a3b8">⚪ این زنگ هنوز ثبت نشده است؛ می‌توانید همین‌جا حضور و غیابش را ثبت کنید.</div>` : (() => {
+        const who = q.by_role === 'admin' ? 'مدیر' : (D().students.find((x: any) => acc()[x.id]?.sid === q.marked_by)?.name ? 'نماینده (' + D().students.find((x: any) => acc()[x.id]?.sid === q.marked_by).name + ')' : 'نماینده');
+        return `<div class="c" style="margin-bottom:10px;border-inline-start:5px solid var(--ok)">✅ این زنگ ساعت <b>${hhmm(q.marked_at)}</b> توسط <b>${esc(who)}</b> ثبت شده است.</div>`;
+      })();
+      const key = periodNoteKey(M.day, curCl(), ap), saved = noteDrafts[key] ?? periodNotes()[key]?.note ?? '';
+      return `${status}<div class="c dynote" style="margin-bottom:10px"><label for="period-note"><b>شرح زنگ ${n(ap)}</b> <span class="m">${esc(curCl())} · ${esc(A.subj(curCl(), M.d, ap - 1))}</span></label><textarea id="period-note" maxlength="5000" placeholder="یادداشت این زنگ را بنویسید…" style="margin-top:8px;min-height:76px" oninput="AT_periodDraft(this.value)">${esc(saved)}</textarea><div class="tb" style="margin:6px 0 0"><button class="btn p" onclick="AT_periodNote()">ذخیره‌ی شرح</button><span class="m">برای حذف، متن را پاک و ذخیره کنید.</span></div></div>`; },
     save: async (ps: number[], rows: any[]) => { const { error } = await sb.rpc('staff_save_attendance', { p_day: iso(AT.w, AT.d), p_cls: curCl(), p_periods: ps, p_rows: rows }); if (error) return errMsg(error); delete EDS[dayKey()]; await load(true); return null; },
   });
   function perTab(M: any) {
@@ -225,7 +232,21 @@ export function mkAttend(A: any) {
     if (error) { A.toast('خطا: ' + errMsg(error)); return; }
     const put = (arr: any[]) => { const i = arr.findIndex((q: any) => q.student_id === sid && q.day === day); const o = { student_id: sid, day, note, called }; if (i >= 0) arr[i] = { ...arr[i], ...o }; else arr.push(o); };
     put(AT.notes); if (AT.stu[sid]?.notes) put(AT.stu[sid].notes);
+    A.callsChanged?.();
     A.toast('شرح ذخیره شد ✓'); draw();
+  }
+  function savePeriodNote() {
+    const day = iso(AT.w, AT.d), cl = curCl(), period = G.st.ap, key = periodNoteKey(day, cl, period), note = val('period-note').trim();
+    D().dayNotes = D().dayNotes || {};
+    if (note) D().dayNotes[key] = { note, w: AT.w, d: AT.d, cl, period };
+    else delete D().dayNotes[key];
+    delete noteDrafts[key];
+    A.save(); A.toast(note ? 'شرح زنگ ذخیره شد ✓' : 'شرح زنگ حذف شد');
+    draw();
+  }
+  function openPeriodNote(w: number, d: number, cl: string, period: number) {
+    AT.w = w; AT.d = d; AT.pc = cl; AT.tab = 'per'; G.st.ap = period;
+    U.p = 'day'; draw(); if (AT.loaded !== iso(w, 0)) load(true);
   }
   async function setCell(lid: string, p: number, st: string) {
     const sid = sidOf(lid); if (!sid) return; document.getElementById('md')!.classList.remove('on');
@@ -254,9 +275,9 @@ export function mkAttend(A: any) {
   const h = {
     AT_go: go, AT_wk: wk, AT_ref: () => load(true), AT_today: () => { AT.w = null; initDay(); load(true); },
     AT_tab: (t: string) => { AT.tab = t; draw(); }, AT_pc: (c: string) => { AT.pc = c; G.st.ap = 0; draw(); }, AT_pp: (_p: number) => { AT.tab = 'per'; draw(); }, AT_f: (v: string) => { AT.f = v; draw(); }, AT_cf: (v: string) => { AT.cf = v; draw(); },
-    AT_cell: cellModal, AT_set: setCell, AT_all: allDay, AT_note: saveNote, AT_csv: csv,
+    AT_cell: cellModal, AT_set: setCell, AT_all: allDay, AT_note: saveNote, AT_periodDraft: (v: string) => { noteDrafts[periodNoteKey(iso(AT.w, AT.d), curCl(), G.st.ap)] = v; }, AT_periodNote: savePeriodNote, AT_csv: csv,
     AT_prof: (lid: string) => { A.op(lid); U.stab = 'abs'; draw(); },
     AT_phone: (lid: string) => { const v = val('ph_' + lid).replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[^\d+]/g, ''); if (v.length < 8) { A.toast('شماره معتبر نیست'); return; } A.sf(lid, 'phone', v); A.toast('شماره ذخیره شد ✓'); },
       };
-  return { page, h, badge, warm, kpi, stuTab, lidOfSid };
+  return { page, h, badge, warm, kpi, stuTab, lidOfSid, openPeriodNote };
 }

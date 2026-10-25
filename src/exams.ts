@@ -100,12 +100,10 @@ export function mkExams(A: any) {
     const kp = INST.map((i) => { const E = mine.filter((e: any) => e.inst === i), l = E[E.length - 1];
       return `<div class="c k" style="border-top:3px solid ${IC[i]}"><span>${i}${l ? ` · ${esc(l.date)}` : ''}</span><b>${l ? n(l.res[s.id].level) : '—'}</b><span>${l ? `${dl(delta(s.id, l))} · رتبه ${n(l.res[s.id].rank)}` : 'نتیجه‌ای ندارد'}</span><span class="m">${n(E.length)} آزمون</span></div>`; }).join('');
     const hero = `<div class="c hero"><div class="av">${n(s.num)}</div><div style="flex:1"><h2 style="margin:0">${esc(s.name)}</h2><div class="m">${s.cls}</div></div><button class="btn" onclick="op('${s.id}')">پروفایل کامل ←</button></div>`;
-    const charts = `<div class="g2" style="margin:10px 0">${INST.map((i) => { const E = exams().filter((e: any) => e.inst === i), has = E.filter((e: any) => e.res[s.id]);
-      return `<div class="c"><h3>روند تراز ${i}</h3>${has.length > 1 ? A.line(has.map((e: any) => e.date.slice(5)), [{ name: i, c: IC[i], v: has.map((e: any) => e.res[s.id].level) }]) : `<p class="m">${has.length ? 'برای رسم نمودار حداقل دو آزمون لازم است' : 'نتیجه‌ای ثبت نشده'}</p>`}</div>`; }).join('')}</div>`;
     const list = mine.filter((e: any) => X.sinst === 'all' || e.inst === X.sinst).reverse();
     if (X.open && !list.find((e: any) => e.id === X.open)) X.open = null;
     const cards = list.map((e: any) => examCard(s, e)).join('') || '<div class="c m">نتیجه‌ای برای نمایش نیست.</div>';
-    return `${nav}${hero}<div class="g" style="margin-top:10px">${kp}</div>${charts}${subjSummary(s, mine)}
+    return `${nav}${hero}<div class="g" style="margin-top:10px">${kp}</div>${A.TR.analysis(s)}
     <h3 class="xh" style="margin-top:16px">کارنامه‌ها</h3>${seg('sinst', [['all', 'همه'], ...INST.map((i) => [i, i])], X.sinst)}${cards}`;
   }
   function examCard(s: any, e: any) {
@@ -116,13 +114,6 @@ export function mkExams(A: any) {
     ${keys.length ? `<div class="tw" style="margin-top:8px"><table><thead><tr><th>درس</th><th>درصد</th><th>درست / غلط / نزده</th><th>تراز درس</th><th>تغییر درصد</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="m">جزئیات دروس ندارد (فقط تراز و رتبه ثبت شده).</p>'}
     <div class="tb" style="margin:10px 0 0"><label class="m">تراز <input id="xl_${e.id}" type="number" value="${r.level ?? ''}" style="width:90px"></label><label class="m">رتبه <input id="xr_${e.id}" type="number" value="${r.rank ?? ''}" style="width:110px"></label><button class="btn" onclick="X_upd('${s.id}','${e.id}')">ذخیره‌ی ویرایش</button><button class="btn" style="color:var(--bad)" onclick="X_delres('${s.id}','${e.id}')">حذف این نتیجه</button></div></details>`;
   }
-  function subjSummary(s: any, mine: any[]) {
-    const m: any = {}; mine.forEach((e: any) => Object.entries(e.res[s.id].subj || {}).forEach(([k, v]: any) => (m[k] = m[k] || []).push(v)));
-    const rows = Object.entries(m).map(([k, a]: any) => ({ k, a, last: a[a.length - 1], prev: a.length > 1 ? a[a.length - 2] : null, av: A.avg(a) })).sort((x: any, y: any) => y.av - x.av);
-    if (!rows.length) return '';
-    return `<div class="c tw"><h3>وضعیت دروس <span class="m">قوی‌ترین: <b>${esc(rows[0].k)}</b> · ضعیف‌ترین: <b>${esc(rows[rows.length - 1].k)}</b></span></h3><table><thead><tr><th>درس</th><th>آخرین</th><th>تغییر</th><th>میانگین خودش</th><th>روند</th></tr></thead><tbody>${rows.map((r: any) => `<tr style="cursor:default"><td>${esc(r.k)}</td><td style="${A.hue(r.last)};text-align:center"><b>${n(r.last)}٪</b></td><td>${r.prev == null ? '<span class="m">—</span>' : dl(r.last - r.prev)}</td><td>${n1(r.av)}٪</td><td>${A.spark(r.a)}</td></tr>`).join('')}</tbody></table></div>`;
-  }
-
   /* ---------- ۴) مدیریت آزمون‌ها ---------- */
   function manage() {
     const E = exams().reverse();

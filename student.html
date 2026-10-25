@@ -27,6 +27,15 @@
     <footer id="credit">created with ❤️ by Abolfazl Rayati</footer>
   </div>
 </div>
+<nav id="student-mobile-nav" aria-label="دسترسی سریع"></nav>
+<div id="student-menu" hidden>
+  <button class="student-menu-backdrop" onclick="closeStudentMenu()" aria-label="بستن فهرست"></button>
+  <div class="student-menu-panel" role="dialog" aria-modal="true" aria-label="بخش‌های پنل دانش‌آموز">
+    <div class="student-menu-head"><b>بخش‌های پنل</b><button type="button" class="ib" onclick="closeStudentMenu()" aria-label="بستن فهرست">✕</button></div>
+    <div id="student-menu-links"></div>
+    <button type="button" class="student-menu-logout" onclick="closeStudentMenu();logout()">خروج از حساب</button>
+  </div>
+</div>
 <div id="toasts"></div>
 <script type="module" src="/src/student.ts"></script>
 </body>
