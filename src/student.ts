@@ -4,7 +4,6 @@ import { ic, initUi, annHtml, daysLeft, toast } from './ui';
 import { sb, cfgOk } from './supa';
 import { initPwa } from './pwa';
 import { importReport, ExamSettings } from './scan';
-import { matchStudents } from './scan/nameMatch';
 import { mkAttGrid } from './attgrid';
 
 const $ = (s: string) => document.querySelector(s) as any;
@@ -241,7 +240,7 @@ const toB64 = (f: File) => new Promise<string>((res) => { const r = new FileRead
 async function pick(inp: HTMLInputElement) {
   const f = inp.files?.[0]; inp.value = ''; if (!f) return;
   T.busy = true; T.err = ''; T.ok = ''; T.prev = null; draw();
-  try { const pf = await prepare(f); const r = await importReport(pf, CFG); const det = r.exam.detected; const bad = !!(det && det.source === 'pdf' && det.name && (matchStudents([det.name], [{ id: 'me', name: T.me.name }])[0]?.score || 0) < 0.5); T.prev = { file: pf, x: r.exam, bad, shown: det && det.name }; if (bad) T.err = `نام روی کارنامه («${det!.name}») با نام شما نمی‌خواند؛ فقط کارنامه‌ی خودتان را بفرستید.`; }
+  try { const pf = await prepare(f); const r = await importReport(pf, CFG); T.prev = { file: pf, x: r.exam }; }
   catch (e: any) { T.err = e?.message === 'layout' ? 'این فایل شبیه کارنامه‌ی ماز یا قلم‌چی نیست.' : (e?.message || 'فایل خوانده نشد.'); }
   T.busy = false; draw();
 }
@@ -256,7 +255,6 @@ function send() {
   <div class="tb" style="margin-top:8px"><button class="btn p" onclick="submitIt()">ارسال برای مدیر</button><span class="m">اعداد قابل ویرایش نیستند؛ اگر اشتباه خوانده شده، فایل واضح‌تری بدهید.</span></div></div>` : ''}`;
 }
 async function submitIt() {
-  if (T.prev && T.prev.bad) { alert('این کارنامه مال شما نیست؛ ارسال نمی‌شود.'); return; }
   const x = T.prev.x, title = $('#st').value.trim(), date = $('#sd').value.trim();
   if (!/^\d{4}\/\d{2}\/\d{2}$/.test(date)) { alert('تاریخ را به شکل 1405/07/10 بنویسید.'); return; }
   if (x.level == null) { alert('تراز کل خوانده نشد؛ فایل واضح‌تری بدهید.'); return; }

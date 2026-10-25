@@ -5,6 +5,7 @@ export interface ExamSettings { sections: Section[] }
 import { extractPdfJpeg, fileToRaster } from './loadReport';
 import type { Raster } from './raster';
 import { nameFromFilename, tokens } from './nameMatch';
+import { readMazName, vocabOf } from './mazName';
 import { extractPdfText } from './pdfText';
 import { MONTHS, QLesson, baseOf, lev, norm, parseQalamchi, squash } from './qalamchiReport';
 import { MazReport, parseMazReport, sigDistance } from './mazReport';
@@ -15,7 +16,7 @@ export interface ImportedExam {
   institute: string; title: string; date: string; time?: string; rows: ImportRow[];
   level: number | null; countryRank: number | null; regionRank: number | null; participants: number | null; warnings: string[]; extraNotes?: string[];
   /** who the sheet belongs to, as far as the file tells: name from the PDF text, from the file name, and (Maz images) a crop of the name cards */
-  detected?: { name: string; source: 'pdf' | 'filename' | ''; alt: string; group?: string; crop?: string; avgLevel?: number | null };
+  detected?: { name: string; source: 'pdf' | 'ocr' | 'filename' | ''; alt: string; group?: string; crop?: string; avgLevel?: number | null };
 }
 export const INSTITUTES = [{ id: 'maz', label: 'ماز', hint: 'کارنامه‌ی تحلیلی (PDF یا عکس)' }, { id: 'qalamchi', label: 'قلم‌چی', hint: 'کارنامه‌ی PDF از kanoon.ir' }];
 
@@ -38,9 +39,12 @@ function mazNameCrop(r: Raster): string {
   } catch (e) { return ''; }
 }
 const slash = (d: string) => d.replace(/\//g, '/');
-export async function importMaz(file: File, cfg: ExamSettings): Promise<{ exam: ImportedExam; sigs: string[] }> {
+export async function importMaz(file: File, cfg: ExamSettings, roster: string[] = []): Promise<{ exam: ImportedExam; sigs: string[] }> {
   const raster = await fileToRaster(file);
   const rep: MazReport = parseMazReport(raster);
+  // who is it? read the name cards against the roster's words (best effort — a failure only means «no name»)
+  let ocrName = '';
+  if (roster.length) { try { ocrName = (await readMazName(raster, vocabOf(roster, tokens))).text; } catch (e) { ocrName = ''; } }
   const known = [...loadSeen(), ...KNOWN_HEADINGS];
   const used = new Set<string>();
   const rows: ImportRow[] = rep.sections.map((s) => {
@@ -60,7 +64,7 @@ export async function importMaz(file: File, cfg: ExamSettings): Promise<{ exam: 
     exam: {
       institute: 'ماز', title: `آزمون ماز${rep.stage ? ' مرحله ' + rep.stage : ''}`, date: rep.date || '', time: rep.time || undefined, rows,
       level: rep.level, countryRank: rep.countryRank, regionRank: rep.regionRank, participants: rep.participants, warnings,
-      detected: { name: '', source: '', alt: '', crop: mazNameCrop(raster) }
+      detected: { name: ocrName, source: ocrName ? 'ocr' : '', alt: '', crop: mazNameCrop(raster) }
     }
   };
 }
@@ -135,7 +139,7 @@ export async function importReport(file: File, cfg: ExamSettings, roster: string
     if (items.length > 40) return { exam: importQalamchi(parseQalamchi(items, roster.flatMap((n) => tokens(n))), cfg, file.name), sigs: [] };
     if (!extractPdfJpeg(bytes)) throw new Error('pdf');
   }
-  const r = await importMaz(file, cfg);
+  const r = await importMaz(file, cfg, roster);
   if (r.exam.detected) r.exam.detected.alt = nameFromFilename(file.name);
   return r;
 }
