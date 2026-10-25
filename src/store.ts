@@ -28,7 +28,20 @@ function badge(t: string, kind: 'ok' | 'wait' | 'bad') {
   let b = document.getElementById('sync'); if (!b) { b = document.createElement('div'); b.id = 'sync'; document.body.appendChild(b); }
   b.textContent = t; b.className = kind; clearTimeout(hideT); if (kind === 'ok') hideT = setTimeout(() => b!.classList.add('off'), 2200);
 }
-export function scheduleSave(d: any) { latest = d; dirty = true; badge('در حال ذخیره…', 'wait'); clearTimeout(timer); timer = setTimeout(flush, 700); }
+/* ---------- کپی محلی (برای کار بدون اینترنت): هر بار که داده خوانده یا ذخیره می‌شود، یک نسخه روی همین دستگاه هم می‌ماند ---------- */
+const MK = 'ss_mirror';
+export type Mirror = { data: any; base: number; dirty: boolean; at: string } | null;
+export function mirrorGet(): Mirror { try { return JSON.parse(localStorage.getItem(MK) || 'null'); } catch (e) { return null; } }
+export function mirrorSet(data: any, base: number, dirty: boolean): boolean { try { localStorage.setItem(MK, JSON.stringify({ data, base, dirty, at: new Date().toISOString() })); return true; } catch (e) { return false; } }
+export function mirrorClear() { try { localStorage.removeItem(MK); } catch (e) { /* ignore */ } }
+// ذخیره در حالت آفلاین: فقط روی همین دستگاه؛ base = نسخه‌ی سروری که این کپی از آن آمده، برای تشخیص تداخل هنگام اتصال دوباره
+export function offlineSave(d: any) {
+  const m = mirrorGet();
+  if (mirrorSet(d, m ? m.base : 0, true)) badge('📴 ذخیره شد (فقط روی این دستگاه)', 'ok');
+  else badge('⚠️ حافظه‌ی مرورگر پر است؛ همین حالا «پشتیبان JSON» بگیرید', 'bad');
+}
+
+export function scheduleSave(d: any) { latest = d; dirty = true; mirrorSet(d, ver, true); badge('در حال ذخیره…', 'wait'); clearTimeout(timer); timer = setTimeout(flush, 700); }
 async function flush() {
   if (busy || !dirty) return; busy = true; dirty = false;
   try {
@@ -36,9 +49,10 @@ async function flush() {
     if (v === null) {
       if (confirm('اطلاعات در دستگاه یا تب دیگری تغییر کرده است.\n\nتأیید = نسخه‌ی همین صفحه جایگزین شود\nانصراف = آخرین نسخه‌ی سرور بارگذاری شود (تغییرهای همین صفحه از بین می‌رود)')) {
         const cur = await loadDoc('main'); v = await putDoc('main', latest, cur ? cur.version : 0);
-      } else { dirty = false; location.reload(); return; }
+      } else { dirty = false; mirrorClear(); location.reload(); return; }
     }
     if (v !== null) ver = v;
+    mirrorSet(latest, ver, dirty);
     badge('☁️ ذخیره شد', 'ok');
   } catch (e) { dirty = true; badge('⚠️ ذخیره نشد؛ دوباره تلاش می‌شود…', 'bad'); clearTimeout(timer); timer = setTimeout(flush, 5000); }
   busy = false; if (dirty && !timer) timer = setTimeout(flush, 300);

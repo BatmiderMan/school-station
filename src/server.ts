@@ -1,5 +1,6 @@
 // بخش «سرور» پنل مدیر: ساخت حساب دانش‌آموز، دریافت کارنامه‌های ارسالی (با بررسی خودکار)، انتشار نتایج و تقویم.
-import { sb, cfgOk } from './supa';
+import { sb, cfgOk as cfgSet } from './supa';
+const isOn = () => cfgSet && !(window as any).__OFFLINE; // در حالت آفلاین هیچ درخواستی به سرور نمی‌رود
 import { inboxGet, inboxSet } from './store';
 import { importReport } from './scan';
 import { matchStudents } from './scan/nameMatch';
@@ -12,9 +13,9 @@ const idb = (mode: IDBTransactionMode, f: (s: IDBObjectStore) => IDBRequest) => 
   o.onerror = () => rej(o.error);
 });
 // با اتصال به سرور، صندوق ورودی روی Supabase ذخیره می‌شود؛ بدون اتصال، در IndexedDB همین مرورگر
-const kvGet = (k: string) => (cfgOk && k === 'inbox' ? inboxGet() : idb('readonly', (s) => s.get(k)));
+const kvGet = (k: string) => (isOn() && k === 'inbox' ? inboxGet() : idb('readonly', (s) => s.get(k)));
 const kvSet = async (k: string, v: any): Promise<boolean> => {
-  try { if (cfgOk && k === 'inbox') await inboxSet(v); else await idb('readwrite', (s) => s.put(v, k)); return true; }
+  try { if (isOn() && k === 'inbox') await inboxSet(v); else await idb('readwrite', (s) => s.put(v, k)); return true; }
   catch (e: any) { (window as any).alert('ذخیره‌ی صندوق ورودی ناموفق بود: ' + (e?.message || e)); return false; }
 };
 const CODE: any = { 'ریاضی ۳۱۱': '311', 'تجربی ۳۲۱': '321', 'تجربی ۳۲۲': '322' }; // کد کلاس
@@ -24,6 +25,7 @@ const pad2 = (x: number) => String(x).padStart(2, '0');
 
 export function mkServer(A: any) {
   const esc = A.esc, n = A.n;
+  const cfgOk = isOn();
   const classOrder = (cl: string) => { const i = A.CL.indexOf(cl); return i < 0 ? A.CL.length : i; };
   const byClass = (a: any, b: any) => classOrder(a.cls) - classOrder(b.cls) || (a.num || 1e9) - (b.num || 1e9);
   const S: any = { cons: [], ct: 'new', cform: '', consErr: '', dr: {}, user: null, mgr: null, tab: 'acc', msg: '', busy: false, inbox: [], creds: null };
@@ -273,6 +275,7 @@ export function mkServer(A: any) {
     return `<div class="c np" style="margin-bottom:10px"><div class="tb" style="margin:0"><div style="flex:1;min-width:200px"><b>${st}</b><div class="m">معافیت‌ها، نتایج آزمون، اطلاعیه‌ها و نمرات بعد از هر تغییر خودکار برای دانش‌آموزان به‌روز می‌شود؛ نیازی به «انتشار» نیست.</div>${a.st === 'err' ? `<div class="dn">${esc(a.msg)}</div>` : ''}${S.schErr ? `<div class="dn">${esc(S.schErr)}</div>` : ''}${S.annErr ? `<div class="dn">${esc(S.annErr)}</div>` : ''}</div><button class="btn" onclick="srvPub()" title="اگر شک دارید، همه‌چیز را دوباره بفرستید">🔄 ارسال مجدد همه</button></div></div>`;
   };
   function page() {
+    if (!cfgOk && (window as any).__OFFLINE) return `<div class="c"><h3>📴 حالت آفلاین</h3><p>بخش سرور (ساخت حساب، دریافت کارنامه، انتشار برای دانش‌آموزان) به اینترنت نیاز دارد. وقتی اینترنت وصل شد، پایین صفحه «اتصال دوباره» را بزنید؛ تغییرهای آفلاین روی سرور ذخیره می‌شوند.</p></div>`;
     if (!cfgOk) return `<div class="c"><h3>اتصال به سرور تنظیم نشده</h3><p>فایل <code dir="ltr">src/config.ts</code> را با آدرس و کلید عمومی پروژه‌ی Supabase پر کنید (راهنما: SETUP.md).</p></div>`;
     if (!S.user) return `<div class="c" style="max-width:380px;margin:auto"><h3>ورود مدیر</h3>${S.msg ? `<p class="dn">${esc(S.msg)}</p>` : ''}<div class="tb" style="flex-direction:column;align-items:stretch"><input id="sv_e" dir="ltr" type="email" placeholder="ایمیل مدیر"><input id="sv_p" dir="ltr" type="password" placeholder="رمز"><button class="btn p" onclick="srvLogin()" ${S.busy ? 'disabled' : ''}>ورود</button></div></div>`;
     return `<div class="tb np"><span class="m">متصل: <span dir="ltr">${esc(S.user.email)}</span></span><button class="btn" onclick="srvOut()">خروج</button></div>` + (S.mgr === false ? `<div class="c dn">این حساب مدیر نیست (راهنما، مرحله‌ی ۴).</div>` : S.mgr === null ? '' : `<div class="np">${tabs()}</div>${S.msg ? `<div class="c np" style="margin-bottom:10px">${S.busy ? '⏳ ' : ''}${esc(S.msg)}</div>` : ''}${pub()}${acc()}`);
