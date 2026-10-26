@@ -12,8 +12,55 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>پنل دانش‌آموز</title>
+<script>try{var __t=localStorage.getItem('ss_theme');if(__t)document.documentElement.setAttribute('data-theme',__t)}catch(e){}</script>
+<style>
+#splash{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;text-align:center;background:#f3f1ea;color:#1d2420;font-family:Vazirmatn,system-ui,Tahoma,sans-serif;transition:opacity .28s}
+@media(prefers-color-scheme:dark){html:not([data-theme=light]) #splash{background:#0d1210;color:#e8efec}}
+html[data-theme=dark] #splash{background:#0d1210;color:#e8efec}
+#splash.out{opacity:0;pointer-events:none}
+#splash .sp-logo{filter:drop-shadow(0 10px 18px #0f766e44);animation:sp-pulse 1.8s ease-in-out infinite}
+#splash h1{margin:0;font-size:19px;font-weight:800}
+#splash .sp-ring{width:38px;height:38px;border-radius:50%;border:4px solid #0f766e2e;border-top-color:#0f766e;animation:sp-spin .85s linear infinite}
+html[data-theme=dark] #splash .sp-ring{border-color:#4fd1bf2e;border-top-color:#4fd1bf}
+@media(prefers-color-scheme:dark){html:not([data-theme=light]) #splash .sp-ring{border-color:#4fd1bf2e;border-top-color:#4fd1bf}}
+#splash p{margin:0;max-width:300px;min-height:44px;font-size:14px;line-height:1.8;opacity:.8}
+#splash button{border:0;border-radius:14px;padding:11px 22px;font:inherit;font-weight:800;background:#0f766e;color:#fff;cursor:pointer}
+@keyframes sp-spin{to{transform:rotate(360deg)}}
+@keyframes sp-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+#netbar{position:fixed;z-index:80;top:calc(env(safe-area-inset-top,0px) + 8px);left:50%;transform:translateX(-50%);max-width:92vw;display:flex;align-items:center;gap:10px;padding:7px 16px;border-radius:999px;font-size:12.5px;font-weight:700;box-shadow:0 6px 20px #0003;background:#0f766e;color:#fff}
+#netbar[hidden]{display:none}
+#netbar.of{background:#b45309}
+#netbar button{border:0;border-radius:999px;padding:3px 12px;font:inherit;font-weight:800;background:#fff;color:#92400e;cursor:pointer}
+#netbar .spn{width:12px;height:12px;border-radius:50%;border:2px solid #fff6;border-top-color:#fff;animation:sp-spin .8s linear infinite}
+</style>
 </head>
 <body class="guest">
+<div id="splash" role="status" aria-live="polite">
+  <div class="sp-logo"><svg viewBox="0 0 512 512" width="76" height="76" aria-hidden="true"><defs><linearGradient id="lg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#14b8a6"/><stop offset="1" stop-color="#0f5f59"/></linearGradient></defs><rect width="512" height="512" rx="116" fill="url(#lg2)"/><path d="M116 386V292a22 22 0 0 1 22-22h40a22 22 0 0 1 22 22v94z" fill="#fff" fill-opacity=".62"/><path d="M214 386V232a22 22 0 0 1 22-22h40a22 22 0 0 1 22 22v154z" fill="#fff"/><path d="M312 386V332a22 22 0 0 1 22-22h40a22 22 0 0 1 22 22v54z" fill="#fff" fill-opacity=".38"/><path d="M256 112l15.5 31.4 34.6 5-25 24.4 5.9 34.5L256 190.9l-31 16.4 5.9-34.5-25-24.4 34.6-5z" fill="#fbbf24"/></svg></div>
+  <h1>پنل دانش‌آموز</h1>
+  <div class="sp-ring"></div>
+  <p id="sp-msg">در حال اتصال به سرور…</p>
+  <button id="sp-retry" type="button" hidden onclick="location.reload()">تلاش دوباره</button>
+</div>
+<div id="netbar" hidden></div>
+<script>
+(function(){
+  var el=document.getElementById('splash'),msg=document.getElementById('sp-msg'),rt=document.getElementById('sp-retry'),timers=[];
+  function set(m){if(msg)msg.textContent=m}
+  function arm(){
+    timers.forEach(clearTimeout);timers=[];rt.hidden=true;
+    timers.push(setTimeout(function(){set('اتصال کندتر از حد معمول است؛ لطفاً کمی صبر کنید…')},5000));
+    timers.push(setTimeout(function(){set('هنوز در حال تلاش برای اتصال هستیم. اگر خیلی طول کشید، دوباره امتحان کنید.');rt.hidden=false},16000));
+  }
+  arm();
+  window.__splash={
+    set:set,
+    show:function(m){el.className='';el.style.display='flex';set(m||'در حال اتصال…');arm()},
+    hide:function(){timers.forEach(clearTimeout);el.className='out';setTimeout(function(){el.style.display='none'},320)}
+  };
+  window.addEventListener('ss-slow',function(){if(el.style.display!=='none'&&el.className!=='out')set('اتصال کند است؛ در حال تلاش مجدد…')});
+})();
+</script>
 <div id="shell">
   <aside id="rail">
     <div class="brand"><i><svg viewBox="0 0 512 512" width="42" height="42" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#14b8a6"/><stop offset="1" stop-color="#0f5f59"/></linearGradient></defs><rect width="512" height="512" rx="116" fill="url(#lg)"/><path d="M116 386V292a22 22 0 0 1 22-22h40a22 22 0 0 1 22 22v94z" fill="#fff" fill-opacity=".62"/><path d="M214 386V232a22 22 0 0 1 22-22h40a22 22 0 0 1 22 22v154z" fill="#fff"/><path d="M312 386V332a22 22 0 0 1 22-22h40a22 22 0 0 1 22 22v54z" fill="#fff" fill-opacity=".38"/><path d="M256 112l15.5 31.4 34.6 5-25 24.4 5.9 34.5L256 190.9l-31 16.4 5.9-34.5-25-24.4 34.6-5z" fill="#fbbf24"/></svg></i><div><b id="who">پنل دانش‌آموز</b><small id="dt"></small></div></div>

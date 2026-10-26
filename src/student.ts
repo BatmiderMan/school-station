@@ -16,7 +16,7 @@ const DAYN = ['شنبه', 'یکشنبه', 'سه‌شنبه', 'چهارشنبه']
 const STN: any = { g: 'معاف (گروه)', f: 'معاف (معلم)', p: 'معاف (پیشرفت)' };
 const SUBJ = ['ریاضی', 'فیزیک', 'شیمی', 'زیست', 'ادبیات', 'عربی', 'دین و زندگی', 'زبان'];
 const CFG: ExamSettings = { sections: SUBJ.map((name, i) => ({ id: 'u' + i, name, color: '#888', n: 0, parts: [] })) };
-const T: any = { con: [], ann: [], xi: 'ماز', sch: [], u: null, me: null, exams: [], cal: [], pend: 0, p: 'home', wi: null, open: null, prev: null, err: '', busy: false, ok: '', login: '', rc: [], rw: 0, rd: 0, rerr: '', ab: [], at: null, atErr: '', ae: {}, ab0: {}, atBusy: false, ap: 0, plan: null, plk: 'all' };
+const T: any = { con: [], ann: [], xi: 'ماز', sch: [], u: null, me: null, exams: [], cal: [], pend: 0, p: 'home', wi: null, open: null, prev: null, err: '', busy: false, ok: '', login: '', rc: [], rw: 0, rd: 0, rerr: '', ab: [], at: null, atErr: '', ae: {}, ab0: {}, atBusy: false, ap: 0, plan: null, plk: 'all', sync: 'ok', loadErr: '' };
 const W: any = window;
 const P = [['home', 'خانه', 'home'], ['ann', 'اطلاعیه‌ها', 'bell'], ['con', 'وقت مشاوره', 'chat'], ['cal', 'تقویم معافیت', 'cal'], ['pln', 'برنامه آزمون‌ها', 'plan'], ['abs', 'غیبت‌های من', 'att'], ['rat', 'حضور و غیاب کلاس', 'clip'], ['rcal', 'تقویم معافیت کلاس', 'users'], ['exm', 'آزمون‌ها', 'clip'], ['send', 'ارسال کارنامه', 'up']];
 const studentPages = () => P.filter(([k]) => T.me?.is_rep || (k !== 'rat' && k !== 'rcal'));
@@ -27,20 +27,60 @@ const jdate = (iso: string, o: any = { day: 'numeric', month: 'long' }) => new D
 const todayIso = () => { const t = new Date(), p = (x: number) => String(x).padStart(2, '0'); return `${t.getFullYear()}-${p(t.getMonth() + 1)}-${p(t.getDate())}`; };
 
 /* ---------- auth & data ---------- */
+const SK = 'ss-student-auth', CK = 'ss-student-cache-v1';
+const SPL = (): any => (window as any).__splash;
+const isNet = (e: any) => !!e && (e.status === 0 || /failed to fetch|network|timeout|load failed|abort|fetch/i.test(String(e.message || e)));
+const annOk = (a: any) => daysLeft(a.exp) >= 0 && (!a.starts || daysLeft(a.starts) <= 0);
+const annSort = (x: any[]) => x.filter(annOk).sort((a: any, b: any) => (b.pin ? 1 : 0) - (a.pin ? 1 : 0) || (a.exp < b.exp ? -1 : 1));
+// نشست را مستقیم از حافظه‌ی دستگاه می‌خوانیم (بدون شبکه) تا برنامه بلافاصله باز شود.
+function localUser(): any { try { return JSON.parse(localStorage.getItem(SK) || 'null')?.user || null; } catch (e) { return null; } }
+// آخرین داده‌های موفق روی خود دستگاه نگه داشته می‌شود؛ دفعه‌ی بعد فوراً نمایش داده می‌شود و در پس‌زمینه به‌روز می‌شود.
+function saveCache() { try { localStorage.setItem(CK, JSON.stringify({ uid: T.u?.id, t: Date.now(), d: { me: T.me, exams: T.exams, cal: T.cal, pend: T.pend, sch: T.sch, ann: T.ann, con: T.con, ab: T.ab, plan: T.plan, rc: T.rc, rerr: T.rerr } })); } catch (e) { /* حافظه پر است */ } }
+function clearCache() { try { localStorage.removeItem(CK); } catch (e) { /* ignore */ } }
+function calcPos() {
+  const iso = todayIso(); let k = -1; T.cal.forEach((r: any, i: number) => { if (r.week_start <= iso) k = i; }); T.wi = Math.max(k, 0);
+  const ws = [...new Set<string>((T.rc || []).map((x: any) => x.week_start))].sort(); let q = 0; ws.forEach((w, i) => { if (w <= iso) q = i; }); T.rw = q; T.rd = 0;
+}
+function restoreCache(uid: string): boolean {
+  try {
+    const c = JSON.parse(localStorage.getItem(CK) || 'null');
+    if (!c || c.uid !== uid || !c.d?.me) return false;
+    Object.assign(T, c.d); T.ann = annSort(T.ann || []); T.rc = T.rc || []; calcPos(); return true;
+  } catch (e) { return false; }
+}
+function netbar() {
+  const b = $('#netbar'); if (!b) return;
+  if (T.me && T.sync === 'syncing') { b.hidden = false; b.className = 'sy'; b.innerHTML = '<i class="spn"></i><span>در حال به‌روزرسانی…</span>'; }
+  else if (T.me && T.sync === 'off') { b.hidden = false; b.className = 'of'; b.innerHTML = '<span>اتصال برقرار نشد؛ داده‌های ذخیره‌شده نمایش داده می‌شود</span><button type="button" onclick="retryLoad()">تلاش دوباره</button>'; }
+  else b.hidden = true;
+}
+async function refresh() {
+  T.sync = 'syncing'; T.loadErr = ''; netbar();
+  try {
+    await load(); T.sync = 'ok';
+    if (!T.me) { const { data } = await sb.auth.getSession(); if (!data.session) { T.u = null; clearCache(); } }
+  } catch (e: any) { T.sync = 'off'; if (!T.me) T.loadErr = isNet(e) ? 'net' : String(e?.message || 'خطای ناشناخته'); }
+  netbar(); draw();
+}
+async function retryLoad() { const cold = !T.me; if (cold) SPL()?.show('در حال اتصال به سرور…'); await refresh(); if (cold) SPL()?.hide(); }
 async function boot() {
   $('#dt').textContent = new Date().toLocaleDateString('fa-IR', { weekday: 'long', day: 'numeric', month: 'long' });
-  if (cfgOk) { const { data } = await sb.auth.getSession(); T.u = data.session?.user || null; if (T.u) await load(); }
-  draw();
+  const lu = cfgOk ? localUser() : null;
+  if (!lu) { draw(); SPL()?.hide(); return; }
+  T.u = lu;
+  if (restoreCache(lu.id)) { draw(); SPL()?.hide(); await refresh(); return; }
+  SPL()?.set('در حال دریافت اطلاعات…');
+  await refresh(); SPL()?.hide();
 }
 async function login() {
   const u = ($('#lu').value || '').trim().toLowerCase(), p = $('#lp').value;
-  T.busy = true; T.login = ''; draw();
+  T.busy = true; T.login = ''; draw(); SPL()?.show('در حال ورود به حساب…');
   const { data, error } = await sb.auth.signInWithPassword({ email: `${u}@school.example`, password: p });
   T.busy = false;
-  if (error) { T.login = authErrText(error, 'نام کاربری یا رمز اشتباه است.'); draw(); return; }
-  T.u = data.user; await load(); draw();
+  if (error) { T.login = authErrText(error, 'نام کاربری یا رمز اشتباه است.'); draw(); SPL()?.hide(); return; }
+  T.u = data.user; SPL()?.set('در حال دریافت اطلاعات…'); await refresh(); SPL()?.hide();
 }
-async function logout() { await sb.auth.signOut(); T.u = null; T.me = null; T.p = 'home'; draw(); }
+async function logout() { clearCache(); T.sync = 'ok'; T.loadErr = ''; await sb.auth.signOut(); T.u = null; T.me = null; T.p = 'home'; netbar(); draw(); }
 async function load() {
   const [m, e, c, s, h, an, cs, ab, pl] = await Promise.all([
     sb.from('students').select('*').maybeSingle(),
@@ -53,22 +93,26 @@ async function load() {
     sb.from('attendance').select('*').order('day', { ascending: false }),
     sb.from('exam_plan').select('data').eq('id', 'main').maybeSingle(),
   ]);
+  // خطای شبکه = داده‌های قبلی (ذخیره‌شده) دست‌نخورده می‌ماند
+  if ([m, e, c, s, h, an, cs, ab, pl].some((r: any) => isNet(r.error))) throw new Error('network');
+  let rc: any[] = [], rerr = '';
+  if (m.data?.is_rep) {
+    const r = await sb.rpc('class_calendar');
+    if (isNet(r.error)) throw new Error('network');
+    if (r.error) rerr = r.error.message.includes('class_calendar') ? 'فایل supabase/update-8.sql روی سرور اجرا نشده است.' : r.error.message; else rc = r.data || [];
+  }
   T.con = cs.data || []; T.ab = ab.error ? [] : ab.data || []; T.plan = pl.error ? null : pl.data?.data || null;
-  T.ann = (an.data || []).filter((a: any) => daysLeft(a.exp) >= 0 && (!a.starts || daysLeft(a.starts) <= 0)).sort((a: any, b: any) => (b.pin ? 1 : 0) - (a.pin ? 1 : 0) || (a.exp < b.exp ? -1 : 1));
+  T.ann = annSort(an.data || []);
   T.sch = (h.data || []).sort((a: any, b: any) => (a.date < b.date ? 1 : -1));
   T.me = m.data; T.exams = (e.data || []).sort((a: any, b: any) => (a.date < b.date ? -1 : 1)); T.cal = c.data || []; T.pend = s.count || 0;
-  T.rc = []; T.rerr = '';
-  if (T.me?.is_rep) {
-    const r = await sb.rpc('class_calendar');
-    if (r.error) T.rerr = r.error.message.includes('class_calendar') ? 'فایل supabase/update-8.sql روی سرور اجرا نشده است.' : r.error.message; else T.rc = r.data || [];
-    const ws = [...new Set<string>(T.rc.map((x: any) => x.week_start))].sort(), iso0 = todayIso(); let q = 0; ws.forEach((w, i) => { if (w <= iso0) q = i; }); T.rw = q; T.rd = 0;
-    await loadAtt();
-  }
-  const iso = todayIso(); let k = -1; T.cal.forEach((r: any, i: number) => { if (r.week_start <= iso) k = i; }); T.wi = Math.max(k, 0);
+  T.rc = rc; T.rerr = rerr; calcPos();
+  if (T.me) saveCache(); else clearCache();
+  if (T.me?.is_rep) await loadAtt();
 }
 
 /* ---------- views ---------- */
 function draw() {
+  netbar();
   document.body.classList.toggle('guest', !T.me);
   $('#who').textContent = T.me ? T.me.name : 'پنل دانش‌آموز';
   if (!T.me) { $('#nv').innerHTML = ''; $('#student-mobile-nav').innerHTML = ''; closeStudentMenu(); $('#pt').textContent = 'ورود'; $('#app').innerHTML = loginView(); return; }
@@ -85,6 +129,7 @@ function draw() {
 const go = (p: string) => { closeStudentMenu(); T.p = p; T.ok = ''; T.err = ''; draw(); window.scrollTo(0, 0); };
 function loginView() {
   if (!cfgOk) return `<div class="c">اتصال به سرور تنظیم نشده است.</div>`;
+  if (T.u && T.loadErr) return `<div class="c" style="max-width:380px;margin:30px auto;text-align:center"><h3 style="font-size:18px">اتصال برقرار نشد</h3><p class="m">${T.loadErr === 'net' ? 'سرور در دسترس نیست یا اینترنت کند است. چند لحظه بعد دوباره تلاش کنید.' : esc(T.loadErr)}</p><div class="tb" style="justify-content:center"><button class="btn p" onclick="retryLoad()">تلاش دوباره</button><button class="btn" onclick="logout()">خروج</button></div></div>`;
   if (T.u) return `<div class="c">حساب شما هنوز به دانش‌آموزی متصل نشده. با مدیر مدرسه تماس بگیرید.<div class="tb" style="margin-top:8px"><button class="btn" onclick="logout()">خروج</button></div></div>`;
   return `<div class="c" style="max-width:360px;margin:30px auto"><h3 style="font-size:18px">ورود به پنل دانش‌آموز</h3><p class="m">نام کاربری و رمز را مدیر مدرسه به شما داده است.</p>${T.login ? `<p class="dn">${T.login}</p>` : ''}<div class="tb" style="flex-direction:column;align-items:stretch"><input id="lu" dir="ltr" placeholder="نام کاربری" autocapitalize="off"><input id="lp" dir="ltr" type="password" placeholder="رمز" onkeydown="if(event.key==='Enter')login()"><button class="btn p" onclick="login()" ${T.busy ? 'disabled' : ''}>${T.busy ? '…' : 'ورود'}</button></div></div>`;
 }
@@ -137,6 +182,7 @@ function abs() {
 /* ----- نماینده: ثبت حضور و غیاب ----- */
 async function loadAtt() {
   const r = await sb.rpc('class_attendance');
+  if (isNet(r.error)) { if (!T.at) T.atErr = 'اتصال برقرار نشد؛ دوباره تلاش کنید.'; return; }
   if (r.error) { T.atErr = absMissing(r.error) ? 'فایل supabase/update-9.sql روی سرور اجرا نشده است.' : r.error.message; T.at = null; return; }
   T.atErr = ''; T.at = r.data; T.ae = {}; T.ab0 = {};
   (r.data?.rows || []).forEach((x: any) => { const k = x.student_id + '|' + x.period, v = x.status === 'late' ? 'l' : 'a'; T.ae[k] = v; T.ab0[k] = v; });
@@ -291,5 +337,5 @@ async function submitIt() {
 
 initUi();
 initPwa();
-Object.assign(W, { conSend, conCancel, T, draw, go, login, logout, pick, submitIt, closeStudentMenu, toggleStudentMenu, plKind: (k: string) => { T.plk = k; draw(); }, plSec: (k: string) => { T.plsec = k; draw(); }, mzSet: (k: string, v: string) => { const m = mzState(); m[k] = v || null; if (k === 'track' || k === 'lane') { m.open = null; m.subj = 'all'; } draw(); }, plGo: (id: string) => { document.getElementById('pl_' + id)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); } });
+Object.assign(W, { retryLoad, conSend, conCancel, T, draw, go, login, logout, pick, submitIt, closeStudentMenu, toggleStudentMenu, plKind: (k: string) => { T.plk = k; draw(); }, plSec: (k: string) => { T.plsec = k; draw(); }, mzSet: (k: string, v: string) => { const m = mzState(); m[k] = v || null; if (k === 'track' || k === 'lane') { m.open = null; m.subj = 'all'; } draw(); }, plGo: (id: string) => { document.getElementById('pl_' + id)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); } });
 boot();

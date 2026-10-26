@@ -44,7 +44,8 @@ self.addEventListener('fetch', (e) => {
   // فقط فایل‌های همین سایت؛ درخواست‌های سرور (Supabase) و POST هرگز کش نمی‌شوند
   if (r.method !== 'GET' || u.origin !== self.location.origin) return;
   if (r.mode === 'navigate') {
-    e.respondWith(fetch(r).then((res) => { const c = res.clone(); caches.open(CACHE).then((x) => x.put('./', c)); return res; }).catch(() => caches.match('./').then((m) => m || caches.match('./index.html'))));
+    // صفحه‌ی اصلی بلافاصله از حافظه‌ی دستگاه باز می‌شود (بدون انتظار برای شبکه) و در پس‌زمینه به‌روز می‌شود.
+    e.respondWith(caches.match('./').then((m) => { const net = fetch(r).then((res) => { if (res.ok) { const c = res.clone(); caches.open(CACHE).then((x) => x.put('./', c)); } return res; }); e.waitUntil(net.catch(() => 0)); return m || net.catch(() => caches.match('./index.html')); }));
     return;
   }
   e.respondWith(caches.match(r).then((m) => m || fetch(r).then((res) => { if (res.ok) { const c = res.clone(); caches.open(CACHE).then((x) => x.put(r, c)); } return res; })));
