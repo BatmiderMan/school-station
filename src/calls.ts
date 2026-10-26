@@ -1,5 +1,6 @@
 // تاریخچه‌ی تماس با والدین: تماس‌های ثبت‌شده در غیبت‌ها + تماس‌های دستی مدیر.
 import { sb } from './supa';
+import { online, down, cacheGet, cacheSet, withTimeout, retryable, flush, pending } from './offq';
 
 type ManualCall = { id: string; student: string; at: string; contact: string; phone?: string; reason: string; outcome: string; note: string; followup: string };
 type AbsenceCall = { student_id: string; day: string; note: string; updated_at?: string };
@@ -17,10 +18,15 @@ export function mkCalls(A: any) {
   const dateFa = (iso: string) => new Date(iso).toLocaleDateString('fa-IR', { year: 'numeric', month: 'long', day: 'numeric' });
   const when = (iso: string) => new Date(iso).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
 
+  const usable = () => A.SV.isMgr() || !!(window as any).__OFFLINE;
+  // تماسی که بدون اینترنت ثبت شده (از بخش غیبت‌ها) همین‌جا هم دیده شود
+  function local(r: any) { const rows = (C.rows as any[]).filter((x) => !(x.student_id === r.student_id && x.day === r.day)); if (r.called) rows.push({ student_id: r.student_id, day: r.day, note: r.note, updated_at: r.updated_at }); C.rows = rows; cacheSet('calls', rows); }
   async function load(force = false) {
-    if (!A.SV.isMgr() || C.busy || (!force && C.loaded && Date.now() - C.at < 30000)) return;
+    if (!usable() || C.busy || (!force && C.loaded && Date.now() - C.at < 30000)) return;
     C.busy = true; C.err = '';
     try {
+      if (!online() || down()) throw { __net: true, message: 'offline' };
+      await flush(); if (pending()) throw { __net: true, message: 'pending' };
       const rows: AbsenceCall[] = [];
       for (let from = 0; ; from += 1000) {
         const { data, error } = await sb.from('att_notes').select('student_id,day,note,updated_at').eq('called', true).order('day', { ascending: false }).range(from, from + 999);
@@ -28,8 +34,10 @@ export function mkCalls(A: any) {
         rows.push(...(data || []));
         if (!data || data.length < 1000) break;
       }
-      C.rows = rows; C.loaded = true;
-    } catch (e: any) { C.err = e?.message || 'دریافت تماس‌های غیبت ناموفق بود.'; }
+      C.rows = rows; C.loaded = true; C.stale = false; cacheSet('calls', rows);
+    } catch (e: any) {
+      if (retryable(e)) { if (!C.stale) C.rows = (await cacheGet('calls')) || C.rows || []; C.loaded = true; C.stale = true; } else C.err = e?.message || 'دریافت تماس‌های غیبت ناموفق بود.';
+    }
     C.busy = false; C.at = Date.now(); if (U.p === 'calls') (A.bg || A.draw)();
   }
 
@@ -72,11 +80,11 @@ export function mkCalls(A: any) {
       <label class="call-full">شرح گفتگو<textarea id="call-note" maxlength="3000" placeholder="آنچه گفته شد و قرار بعدی را بنویسید…">${esc(x?.note || '')}</textarea></label><div class="tb" style="margin:10px 0 0"><button class="btn p" onclick="CALL_save()">${edit ? 'ذخیره‌ی تغییرات' : 'ثبت تماس'}</button></div></div>`;
   }
   function page() {
-    if (A.SV.isMgr()) load();
+    if (usable()) load();
     const all = combined(), own = all.filter((x: any) => x.source === 'manual').length, absence = all.length - own, follow = all.filter((x: any) => x.source === 'manual' && x.outcome === 'followup').length;
     return `<div class="call-hero"><div><small>دفتر تماس با والدین</small><h2>همه‌ی گفتگوها، یک‌جا</h2><p>تماس‌های غیبت خودکار اضافه می‌شوند. تماس‌های دیگر را همین‌جا ثبت کنید.</p></div><button class="btn" onclick="CALL_refresh()">${C.busy ? '⏳ در حال دریافت…' : '🔄 به‌روزرسانی'}</button></div>
       <div class="call-kpis"><div class="c k"><b>${n(all.length)}</b><span>کل تماس‌ها</span></div><div class="c k"><b>${n(absence)}</b><span>از غیبت‌ها</span></div><div class="c k"><b>${n(own)}</b><span>ثبت دستی</span></div><div class="c k"><b>${n(follow)}</b><span>نیازمند پیگیری</span></div></div>
-      ${!A.SV.isMgr() ? '<div class="c m" style="margin-bottom:10px">برای نمایش تماس‌های غیبت به بخش سرور وارد شوید. تماس‌های دستی همچنان در این پنل ثبت می‌شوند.</div>' : ''}
+      ${!usable() ? '<div class="c m" style="margin-bottom:10px">برای نمایش تماس‌های غیبت به بخش سرور وارد شوید. تماس‌های دستی همچنان در این پنل ثبت می‌شوند.</div>' : ''}
       ${C.err ? `<div class="c dn" style="margin-bottom:10px">دریافت تماس‌های غیبت ناموفق بود: ${esc(C.err)}</div>` : ''}${form()}
       <div class="c call-filter"><div class="tb" style="margin:0"><input id="call-q" placeholder="جستجوی نام، موضوع یا شرح…" value="${esc(C.q)}" oninput="CALL_q(this.value)" style="flex:1;min-width:180px"><select onchange="CALL_filter('source',this.value)"><option value="all">همه‌ی تماس‌ها</option><option value="absence" ${C.source === 'absence' ? 'selected' : ''}>از غیبت‌ها</option><option value="manual" ${C.source === 'manual' ? 'selected' : ''}>ثبت دستی</option></select><select onchange="CALL_filter('cls',this.value)"><option value="all">همه‌ی کلاس‌ها</option>${A.CL.map((cl: string) => `<option value="${esc(cl)}" ${C.cls === cl ? 'selected' : ''}>${esc(cl)}</option>`).join('')}</select><select onchange="CALL_filter('student',this.value)"><option value="all">همه‌ی دانش‌آموزان</option>${students().map((s: any) => `<option value="${s.id}" ${C.student === s.id ? 'selected' : ''}>${esc(s.name)} · ${esc(s.cls)}</option>`).join('')}</select><button class="btn" onclick="CALL_csv()">⬇ CSV</button></div></div>
       <div id="call-list">${listHtml()}</div>`;
@@ -103,5 +111,5 @@ export function mkCalls(A: any) {
     CALL_absence: (id: string) => { A.op(id); U.stab = 'abs'; A.draw(); },
   };
   const openForStudent = (id: string) => { C.student = id; C.cls = 'all'; U.p = 'calls'; A.draw(); };
-  return { page, h, openForStudent, invalidate: () => { C.loaded = false; C.at = 0; } };
+  return { page, h, openForStudent, local, invalidate: () => { C.loaded = false; C.at = 0; } };
 }

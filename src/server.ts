@@ -1,5 +1,6 @@
 // بخش «سرور» پنل مدیر: ساخت حساب دانش‌آموز، دریافت کارنامه‌های ارسالی (با بررسی خودکار)، انتشار نتایج و تقویم.
 import { sb, cfgOk as cfgSet } from './supa';
+import { send, online, down, cacheGet, cacheSet, withTimeout, retryable, flush, pending, onSynced } from './offq';
 const isOn = () => cfgSet && !(window as any).__OFFLINE; // در حالت آفلاین هیچ درخواستی به سرور نمی‌رود
 import { inboxGet, inboxSet } from './store';
 import { importReport } from './scan';
@@ -26,9 +27,10 @@ const pad2 = (x: number) => String(x).padStart(2, '0');
 export function mkServer(A: any) {
   const esc = A.esc, n = A.n;
   const cfgOk = isOn();
+  const OFF = () => !!(window as any).__OFFLINE;
   const classOrder = (cl: string) => { const i = A.CL.indexOf(cl); return i < 0 ? A.CL.length : i; };
   const byClass = (a: any, b: any) => classOrder(a.cls) - classOrder(b.cls) || (a.num || 1e9) - (b.num || 1e9);
-  const S: any = { cons: [], ct: 'new', cform: '', consErr: '', dr: {}, user: null, mgr: null, tab: 'acc', msg: '', busy: false, inbox: [], creds: null };
+  const S: any = { cons: [], consStale: false, consAt: 0, ct: 'new', cform: '', consErr: '', dr: {}, user: null, mgr: null, tab: 'acc', msg: '', busy: false, inbox: [], creds: null };
   const sd = () => (A.D.srv = A.D.srv || { accounts: {}, firstOnly: true });
   const draw = () => A.draw();
   const bg = () => (A.bg ? A.bg() : A.draw());
@@ -52,6 +54,8 @@ export function mkServer(A: any) {
   const pend = () => S.inbox.length + (S.sc || 0);
   async function init() {
     S.inbox = (await kvGet('inbox').catch(() => null)) || [];
+    onSynced(() => { if (OFF() || (S.user && S.mgr)) consLoad().then(bg); });
+    if (OFF()) await consCache(); // آفلاین: آخرین درخواست‌های دریافتی از کش محلی
     if (cfgOk) { const { data } = await sb.auth.getSession(); S.user = data.session?.user || null; if (S.user) { await chk().catch(() => 0); if (S.mgr) { consLoad().then(bg); repLoad().then(bg); refreshPend().then(bg); autoPub(); } } }
     draw();
   }
@@ -203,6 +207,8 @@ export function mkServer(A: any) {
     });
     S.annErr = '';
     try { await syncAnn(); } catch (e: any) { S.annErr = 'اطلاعیه‌ها منتشر نشد: ' + (e.message || e) + ' — فایل‌های supabase/update-3.sql و update-4.sql را اجرا کنید.'; }
+    S.planErr = '';
+    try { if (A.D.plan) await up('exam_plan', [{ id: 'main', data: A.D.plan }], 'id'); } catch (e: any) { S.planErr = 'برنامه‌ی آزمون‌ها منتشر نشد: ' + (e.message || e) + ' — فایل supabase/update-11.sql را اجرا کنید.'; }
     S.schErr = '';
     try {
       await up('school_pub', sch, 'student_id,exam_key');
@@ -272,7 +278,7 @@ export function mkServer(A: any) {
   // وضعیت همگام‌سازی خودکار با پنل دانش‌آموزان
   const pub = () => {
     const a = S.auto || {}, st = a.st === 'wait' ? '⏳ در حال همگام‌سازی…' : a.st === 'err' ? '⚠ همگام‌سازی ناموفق' : a.st === 'ok' ? `✅ همه‌چیز برای دانش‌آموزان به‌روز است (${a.at})` : '🔄 خودکار';
-    return `<div class="c np" style="margin-bottom:10px"><div class="tb" style="margin:0"><div style="flex:1;min-width:200px"><b>${st}</b><div class="m">معافیت‌ها، نتایج آزمون، اطلاعیه‌ها و نمرات بعد از هر تغییر خودکار برای دانش‌آموزان به‌روز می‌شود؛ نیازی به «انتشار» نیست.</div>${a.st === 'err' ? `<div class="dn">${esc(a.msg)}</div>` : ''}${S.schErr ? `<div class="dn">${esc(S.schErr)}</div>` : ''}${S.annErr ? `<div class="dn">${esc(S.annErr)}</div>` : ''}</div><button class="btn" onclick="srvPub()" title="اگر شک دارید، همه‌چیز را دوباره بفرستید">🔄 ارسال مجدد همه</button></div></div>`;
+    return `<div class="c np" style="margin-bottom:10px"><div class="tb" style="margin:0"><div style="flex:1;min-width:200px"><b>${st}</b><div class="m">معافیت‌ها، نتایج آزمون، اطلاعیه‌ها و نمرات بعد از هر تغییر خودکار برای دانش‌آموزان به‌روز می‌شود؛ نیازی به «انتشار» نیست.</div>${a.st === 'err' ? `<div class="dn">${esc(a.msg)}</div>` : ''}${S.schErr ? `<div class="dn">${esc(S.schErr)}</div>` : ''}${S.annErr ? `<div class="dn">${esc(S.annErr)}</div>` : ''}${S.planErr ? `<div class="dn">${esc(S.planErr)}</div>` : ''}</div><button class="btn" onclick="srvPub()" title="اگر شک دارید، همه‌چیز را دوباره بفرستید">🔄 ارسال مجدد همه</button></div></div>`;
   };
   function page() {
     if (!cfgOk && (window as any).__OFFLINE) return `<div class="c"><h3>📴 حالت آفلاین</h3><p>بخش سرور (ساخت حساب، دریافت کارنامه، انتشار برای دانش‌آموزان) به اینترنت نیاز دارد. وقتی اینترنت وصل شد، پایین صفحه «اتصال دوباره» را بزنید؛ تغییرهای آفلاین روی سرور ذخیره می‌شوند.</p></div>`;
@@ -296,7 +302,19 @@ export function mkServer(A: any) {
     }
     return out;
   }
-  async function consLoad() { const { data, error } = await sb.from('consults').select('*').order('created_at'); if (error) { S.consErr = error.message.includes('consults') ? 'جدول مشاوره ساخته نشده؛ فایل supabase/update-5.sql را اجرا کنید.' : error.message; return; } S.cons = data || []; S.consErr = ''; }
+  async function consCache() {
+    if (!(S.consStale && S.cons.length)) { const c = await cacheGet('cons'); if (c) { S.cons = c.cons || []; S.consAt = c.at || 0; } }
+    S.consStale = true;
+  }
+  async function consLoad() {
+    if (OFF() || !online() || down()) { await consCache(); return; }
+    await flush(); if (pending()) { await consCache(); return; }
+    let r: any; try { r = await withTimeout<any>(sb.from('consults').select('*').order('created_at')); } catch (e) { r = { error: e }; }
+    if (r.error) { if (retryable(r.error)) { await consCache(); return; } S.consErr = r.error.message.includes('consults') ? 'جدول مشاوره ساخته نشده؛ فایل supabase/update-5.sql را اجرا کنید.' : r.error.message; return; }
+    S.cons = r.data || []; S.consErr = ''; S.consAt = Date.now(); S.consStale = false; cacheSet('cons', { cons: S.cons, at: S.consAt });
+  }
+  async function localCons(id: string, patch: any) { const i = S.cons.findIndex((x: any) => x.id === id); if (i >= 0) S.cons[i] = { ...S.cons[i], ...patch }; S.consStale = true; await cacheSet('cons', { cons: S.cons, at: S.consAt || 0 }); }
+  const consBar = () => (OFF() || S.consStale) ? `<div class="c" style="margin-bottom:10px;border-inline-start:5px solid #f59e0b">📴 بدون اتصال به سرور — ${S.consAt ? `آخرین دریافت درخواست‌ها: <b>${new Date(S.consAt).toLocaleString('fa-IR', { timeZone: 'Asia/Tehran', dateStyle: 'medium', timeStyle: 'short' })}</b>. درخواست‌های تازه‌ی دانش‌آموزان بعد از اتصال می‌رسد.` : 'هنوز درخواستی از سرور روی این دستگاه نیست.'} تعیین وقت، رد، لغو و بایگانی همین‌جا ذخیره می‌شود و بعد از اتصال به سرور (و دانش‌آموز) می‌رسد${pending() ? ` (<b>${n(pending())}</b> تغییر منتظر ارسال)` : ''}.</div>` : '';
   const cname = (r: any) => { const l = lidOf(r.student_id), s = l ? stu(l) : null; return s ? { n: s.name, c: s.cls, num: s.num } : { n: 'دانش‌آموز', c: '', num: null }; };
   const fdate = (iso: string) => new Date(iso + 'T12:00:00').toLocaleDateString('fa-IR', { weekday: 'long', day: 'numeric', month: 'long' });
   const ftime = (t: string) => String(t || '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d]);
@@ -326,7 +344,7 @@ export function mkServer(A: any) {
     return `<div class="c"><h3>ساعت‌های مشاوره</h3><p class="m">روزها و ساعت‌هایی که برای مشاوره آزاد هستید. هنگام تعیین وقت، ساعت‌های خالی بر اساس همین‌ها پیشنهاد می‌شود.</p><div class="tb"><label class="m">مدت هر جلسه <select onchange="conAvLen(this.value)">${[15, 20, 30, 45].map((x) => `<option ${a.len === x ? 'selected' : ''}>${x}</option>`).join('')}</select> دقیقه</label></div>${nm.map((d, i) => { const c = a.days[i] || { on: 0, f: '10:00', t: '12:00' }; return `<div class="tb"><label style="width:96px"><input type="checkbox" ${c.on ? 'checked' : ''} onchange="conAvDay(${i},'on',this.checked?1:0)"> ${d}</label>از <input type="time" value="${c.f}" onchange="conAvDay(${i},'f',this.value)"> تا <input type="time" value="${c.t}" onchange="conAvDay(${i},'t',this.value)"></div>`; }).join('')}</div>`;
   }
   function conPage() {
-    if (!cfgOk || !S.user || !S.mgr) return `<div class="c">برای مدیریت وقت مشاوره، اول در تب «سرور» با حساب مدیر وارد شوید.<div class="tb" style="margin-top:8px"><button class="btn p" onclick="srvGoPage()">رفتن به سرور</button></div></div>`;
+    if (!OFF() && (!cfgOk || !S.user || !S.mgr)) return `<div class="c">برای مدیریت وقت مشاوره، اول در تب «سرور» با حساب مدیر وارد شوید.<div class="tb" style="margin-top:8px"><button class="btn p" onclick="srvGoPage()">رفتن به سرور</button></div></div>`;
     const P = S.cons.filter((r: any) => r.status === 'pending'), Sc = S.cons.filter((r: any) => r.status === 'scheduled').sort((a: any, b: any) => (a.slot_date + (a.slot_time || '')).localeCompare(b.slot_date + (b.slot_time || ''))), Rj = S.cons.filter((r: any) => r.status === 'rejected'), arc = A.D.consult || [];
     const tabs = `<div class="seg">${[['new', `⏳ درخواست‌ها (${n(P.length)})`], ['sch', `📋 فهرست (${n(Sc.length)})`], ['cal', '📅 تقویم'], ['arc', `🗂 بایگانی (${n(arc.length)})`], ['set', '⚙️ ساعت‌های مشاوره']].map(([k, t]) => `<button class="${S.ct === k ? 'on' : ''}" onclick="conTab('${k}')">${t}</button>`).join('')}</div>`;
     let body = '';
@@ -335,21 +353,26 @@ export function mkServer(A: any) {
     else if (S.ct === 'cal') body = conCal();
     else if (S.ct === 'set') body = conSettings();
     else body = arc.map((r: any, i: number) => `<div class="row" style="cursor:default"><span><b>${esc(r.name)}</b> <span class="tag">${r.cls}</span><br><span class="m">${r.slot_date ? fdate(r.slot_date) + ' · ' + ftime(r.slot_time) : 'بدون وقت'}</span></span><button class="btn" onclick="conDelArc(${i})">✕</button></div>`).join('') || '<div class="c m">بایگانی خالی است.</div>';
-    return `<div class="tb"><button class="btn" onclick="conRefresh()">↻ به‌روزرسانی</button><span class="m">درخواست‌ها فقط تا زمانی که بایگانی نکنید روی سرور می‌مانند؛ بعد از «انجام شد» روی لپ‌تاپ شما می‌ماند و از سرور پاک می‌شود.</span></div>${S.consErr ? `<div class="c dn">${esc(S.consErr)}</div>` : ''}${tabs}${body}`;
+    return `${consBar()}<div class="tb"><button class="btn" onclick="conRefresh()">↻ به‌روزرسانی</button><span class="m">درخواست‌ها فقط تا زمانی که بایگانی نکنید روی سرور می‌مانند؛ بعد از «انجام شد» روی لپ‌تاپ شما می‌ماند و از سرور پاک می‌شود.</span></div>${S.consErr ? `<div class="c dn">${esc(S.consErr)}</div>` : ''}${tabs}${body}`;
   }
   async function conSave(id: string) {
     const dT = $v('cd_' + id), t = $v('ct_' + id), p = $v('cp_' + id).trim(), nt = $v('cn_' + id).trim(), d = dT ? j2iso(dT) : null, dur = +$v('cu_' + id) || av().len;
     if (!d || !t) { alert('تاریخ و ساعت را انتخاب کنید.'); return; }
     const clash = overlap(d, t, dur, id);
     if (clash && !confirm(`این بازه با وقت «${cname(clash).n}» (${trange(clash)}) هم‌پوشانی دارد؛ باز هم ثبت شود؟`)) return;
-    S.place = p; const { error } = await sb.from('consults').update({ status: 'scheduled', slot_date: d, slot_time: t, place: p, note: nt || null, dur }).eq('id', id);
-    if (error) { alert('خطا: ' + (error.message.includes('dur') ? 'فایل supabase/update-6.sql را اجرا کنید.' : error.message)); return; } S.cform = ''; await consLoad(); S.ct = S.ct === 'cal' ? 'cal' : 'sch'; say('وقت ثبت شد؛ دانش‌آموز در پنلش می‌بیند.');
+    S.place = p; const patch = { status: 'scheduled', slot_date: d, slot_time: t, place: p, note: nt || null, dur }, r = await send({ k: 'update', table: 'consults', id, patch });
+    if (r.error) { alert('خطا: ' + (r.error.includes('dur') ? 'فایل supabase/update-6.sql را اجرا کنید.' : r.error)); return; } S.cform = '';
+    if (r.queued) await localCons(id, patch); else await consLoad();
+    S.ct = S.ct === 'cal' ? 'cal' : 'sch'; say(r.queued ? 'وقت ثبت شد (آفلاین)؛ بعد از اتصال به سرور، دانش‌آموز در پنلش می‌بیند.' : 'وقت ثبت شد؛ دانش‌آموز در پنلش می‌بیند.');
   }
-  async function conReject(id: string) { const m = prompt('پیام برای دانش‌آموز (مثلاً دلیل یا پیشنهاد):'); if (m === null) return; const { error } = await sb.from('consults').update({ status: 'rejected', note: m.trim() || null }).eq('id', id); if (error) { alert('خطا: ' + error.message); return; } await consLoad(); say(''); }
-  async function conBack(id: string) { if (!confirm('وقت لغو شود و درخواست به صف برگردد؟')) return; const { error } = await sb.from('consults').update({ status: 'pending', slot_date: null, slot_time: null, place: null, note: null }).eq('id', id); if (error) { alert('خطا: ' + error.message); return; } await consLoad(); S.ct = 'new'; say(''); }
+  async function conReject(id: string) { const m = prompt('پیام برای دانش‌آموز (مثلاً دلیل یا پیشنهاد):'); if (m === null) return; const patch = { status: 'rejected', note: m.trim() || null }, r = await send({ k: 'update', table: 'consults', id, patch }); if (r.error) { alert('خطا: ' + r.error); return; } if (r.queued) await localCons(id, patch); else await consLoad(); say(''); }
+  async function conBack(id: string) { if (!confirm('وقت لغو شود و درخواست به صف برگردد؟')) return; const patch = { status: 'pending', slot_date: null, slot_time: null, place: null, note: null }, r = await send({ k: 'update', table: 'consults', id, patch }); if (r.error) { alert('خطا: ' + r.error); return; } if (r.queued) await localCons(id, patch); else await consLoad(); S.ct = 'new'; say(''); }
   async function conDone(id: string) {
     const r = S.cons.find((x: any) => x.id === id), p = cname(r); (A.D.consult = A.D.consult || []).push({ lid: lidOf(r.student_id), name: p.n, cls: p.c, topic: 'تحصیلی', msg: r.msg, slot_date: r.slot_date, slot_time: r.slot_time, dur: r.dur, place: r.place, note: r.note, status: r.status });
-    A.save(); const { error } = await sb.from('consults').delete().eq('id', id); if (error) { alert('در بایگانی ذخیره شد ولی حذف از سرور ناموفق: ' + error.message); } await consLoad(); say('');
+    A.save(); const dr = await send({ k: 'delete', table: 'consults', id });
+    if (dr.error) alert('در بایگانی ذخیره شد ولی حذف از سرور ناموفق: ' + dr.error);
+    if (dr.queued) { S.cons = S.cons.filter((x: any) => x.id !== id); S.consStale = true; await cacheSet('cons', { cons: S.cons, at: S.consAt || 0 }); } else await consLoad();
+    say('');
   }
   const badge = () => (S.cons.filter((r: any) => r.status === 'pending').length ? `<div class="c" style="margin-bottom:10px;cursor:pointer;border-inline-start:5px solid #8b5cf6" onclick="srvGoCon()">💬 ${n(S.cons.filter((r: any) => r.status === 'pending').length)} درخواست وقت مشاوره منتظر شماست</div>` : '') + (pend() ? `<div class="c" style="margin-bottom:10px;cursor:pointer;border-inline-start:5px solid #f59e0b" onclick="srvGo()">📥 ${n(pend())} کارنامه منتظر بررسی شما است</div>` : '');
   const h = { conTab: (k: string) => { S.ct = k; S.cform = ''; draw(); }, conForm: (id: string) => { S.cform = id; draw(); }, conPick: (id: string, iso: string, t: string) => { (document.getElementById('cd_' + id) as HTMLInputElement).value = iso2j(iso); (document.getElementById('ct_' + id) as HTMLInputElement).value = t; }, conDay: (iso: string) => { S.cdSel = iso; S.cform = ''; draw(); }, conCalNav: (k: number) => { if (k === 0) { S.cm = null; S.cdSel = isoToday(); } else { S.cm.m += k; if (S.cm.m > 12) { S.cm.m = 1; S.cm.y++; } if (S.cm.m < 1) { S.cm.m = 12; S.cm.y--; } } draw(); }, conAvLen: (v: string) => { av().len = +v; A.save(); }, conAvDay: (i: number, k: string, v: any) => { const a = av(); a.days[i] = a.days[i] || { on: 0, f: '10:00', t: '12:00' }; a.days[i][k] = v; A.save(); }, conSave, conReject, conBack, conDone, conRefresh: async () => { await consLoad(); say(''); }, conDelArc: (i: number) => { if (!confirm('از بایگانی حذف شود؟')) return; A.D.consult.splice(i, 1); A.save(); draw(); }, srvGoPage: () => { A.U.p = 'srv'; draw(); }, srvGoCon: () => { A.U.p = 'con'; S.ct = 'new'; draw(); }, annSync: async () => { if (!S.user || !S.mgr) throw new Error('login'); await syncAnn(); }, srvDr: (lid: string, k: string, val: string) => { (S.dr[lid] = S.dr[lid] || {})[k] = val.trim(); }, srvLogin: login, srvOut: logout, srvTab: (k: string) => { S.tab = k; S.msg = ''; draw(); }, srvOne: createOne, srvBulk: bulk, srvPass: pass, srvRep: rep, srvToggle: toggle, srvDel: del, srvDelAll: delAll, srvCsv: csv, srvFirst: (v: boolean) => { sd().firstOnly = v; A.save(); }, srvFetch: fetchInbox, srvApp: approve, srvAll: approveAll, srvRej: reject, srvPub: publishAll, srvGo: () => { A.U.X = A.U.X || {}; A.U.X.tab = 'in'; A.U.p = 'exm'; draw(); }, S_: S };

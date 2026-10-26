@@ -1,5 +1,6 @@
 // برنامه‌ی آزمون‌ها: تشریحی مدرسه، ماز، قلم‌چی و ... (نمایش مشترک پنل مدیر و دانش‌آموز + ویرایش مدیر)
 import { j2iso, daysLeft } from './ui';
+import { seedMaze, mkMazeAdmin } from './maze';
 
 export const KINDS: Record<string, { t: string; c: string; i: string }> = {
   sch: { t: 'آزمون تشریحی مدرسه', c: '#0891b2', i: '📝' },
@@ -8,7 +9,7 @@ export const KINDS: Record<string, { t: string; c: string; i: string }> = {
   oth: { t: 'سایر', c: '#64748b', i: '📌' },
 };
 export interface PEx { id: string; kind: string; stage: string; title?: string; date?: string; dateText?: string; approx?: string; final?: boolean; groups: { s: string; t: string }[]; note?: string }
-export interface Plan { v: number; exams: PEx[]; notes: string[] }
+export interface Plan { v: number; exams: PEx[]; notes: string[]; maze?: any }
 
 // برنامه‌ی تشریحی مدرسه (از فایل «آزمون تشریحی») به‌عنوان مقدار اولیه
 export function seedPlan(): Plan {
@@ -74,7 +75,8 @@ export function planView(P: Plan | null | undefined, o: PView): string {
 // ویرایشگر مدیر
 export function mkPlanAdmin(A: any) {
   const esc = A.esc, U = A.U, val = (id: string) => (document.getElementById(id) as HTMLInputElement | null)?.value ?? '';
-  const P = (): Plan => (A.D.plan = A.D.plan || seedPlan());
+  const MZA = mkMazeAdmin(A);
+  const P = (): Plan => { const p: Plan = (A.D.plan = A.D.plan || seedPlan()); if (!p.maze) p.maze = seedMaze(); return p; };
   const draft = () => (U.PLd as PEx | undefined);
   const latin = (s: string) => s.replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
   const form = () => { const d = draft(); if (!d) return '';
@@ -87,10 +89,14 @@ export function mkPlanAdmin(A: any) {
       <div class="tb"><button class="btn" onclick="PL_add()">＋ درس دیگر</button></div>
       <textarea id="pl_note" placeholder="توضیح اضافه برای این آزمون (اختیاری)" style="width:100%;min-height:54px">${esc(d.note || '')}</textarea>
       <div class="tb" style="margin:8px 0 0"><button class="btn p" onclick="PL_save()">ذخیره</button><button class="btn" onclick="PL_cancel()">انصراف</button>${U.PLe !== 'new' ? '<span style="flex:1"></span><button class="btn" style="color:var(--bad)" onclick="PL_del()">حذف این آزمون</button>' : ''}</div></div>`; };
-  function page() {
+  function schoolPage() {
     const p = P(), k = U.plk || 'all';
     return `<div class="tb"><button class="btn p" onclick="PL_new()">＋ آزمون جدید</button><span class="m">این برنامه خودکار در پنل دانش‌آموزان نمایش داده می‌شود؛ آزمون‌های ماز و قلم‌چی را هم همین‌جا اضافه کنید.</span></div>${form()}${planView(p, { kind: k, admin: true, setKind: 'PL_kind', esc, n: A.n })}
       <div class="c" style="margin-top:14px"><h3>📌 توضیحات و نکات مهم (هر خط یک مورد)</h3><textarea id="pl_notes" style="width:100%;min-height:110px">${esc(p.notes.join('\n'))}</textarea><div class="tb" style="margin:8px 0 0"><button class="btn p" onclick="PL_notes()">ذخیره‌ی توضیحات</button></div></div>`;
+  }
+  function page() {
+    const sec = U.plsec || 'maze';
+    return `<div class="seg"><button class="${sec === 'maze' ? 'on' : ''}" onclick="PL_sec('maze')">🧭 نقشه‌ی راه ماز</button><button class="${sec === 'school' ? 'on' : ''}" onclick="PL_sec('school')">📝 آزمون‌های تشریحی مدرسه</button></div>${sec === 'maze' ? MZA.page() : schoolPage()}`;
   }
   const readForm = () => { const d = draft(); if (!d) return; d.stage = val('pl_stage').trim(); d.title = val('pl_title').trim(); d.date = latin(val('pl_date')).trim(); d.dateText = val('pl_dt').trim(); d.approx = latin(val('pl_ap')).trim(); d.final = (document.getElementById('pl_fin') as HTMLInputElement | null)?.checked || false; d.note = val('pl_note').trim();
     const ss = [...document.querySelectorAll('.pl_s')] as HTMLInputElement[], ts = [...document.querySelectorAll('.pl_t')] as HTMLInputElement[]; d.groups = ss.map((x, i) => ({ s: x.value.trim(), t: (ts[i]?.value || '').trim() })); };
@@ -113,6 +119,8 @@ export function mkPlanAdmin(A: any) {
     PL_del: () => { const d = draft(); if (!d || !confirm('این آزمون از برنامه حذف شود؟')) return; const p = P(); p.exams = p.exams.filter((x) => x.id !== d.id); U.PLe = null; U.PLd = null; A.save(); A.draw(); },
     PL_notes: () => { P().notes = val('pl_notes').split('\n').map((x) => x.trim()).filter(Boolean); A.save(); A.toast('ذخیره شد ✓'); },
     PL_kind: (k: string) => { U.plk = k; A.draw(); },
+    PL_sec: (k: string) => { U.plsec = k; A.draw(); },
+    ...MZA.h,
     plGo: (id: string) => { document.getElementById('pl_' + id)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); },
   };
   return { page, h, ensure: P };

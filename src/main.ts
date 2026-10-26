@@ -4,6 +4,7 @@ import { mkServer } from './server';
 import { mkExams } from './exams';
 import { mkTrend } from './trend';
 import { mkAttend } from './attend';
+import { mkPlanAdmin } from './plan';
 import { mkCalls } from './calls';
 import { initPwa } from './pwa';
 import { snapList } from './store';
@@ -71,7 +72,7 @@ function go(p){if(p==='calls'&&U.calls)U.calls.student='all';U.p=p;VSIG='';draw(
 let VSIG='',bgT:any=0;
 /* بازرسم پس‌زمینه (بعد از دریافت/ارسال داده با سرور): اگر کاربر مشغول تایپ است صبر می‌کند تا متنش پاک نشود */
 function bgDraw(){const a=document.activeElement as HTMLElement|null;if(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)&&a.closest&&a.closest('#app')){clearTimeout(bgT);bgT=setTimeout(bgDraw,3000);return}draw()}
-function draw(){const sig=[U.p,U.sid,U.xs,U.stab,U.X&&U.X.tab,U.AT&&U.AT.tab].join('|'),nav=sig!==VSIG,y=window.scrollY,previousPage=VSIG.split('|')[0];VSIG=sig;ensureNums();ensureEx();if(typeof AT2!=='undefined')AT2.warm();if(U.w==null)U.w=wk0();$('#dt').textContent=new Date().toLocaleDateString('fa-IR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+function draw(){if(typeof PLA!=='undefined'&&(!D.plan||!D.plan.maze)){PLA.ensure();setTimeout(save,0)}const sig=[U.p,U.sid,U.xs,U.stab,U.X&&U.X.tab,U.AT&&U.AT.tab].join('|'),nav=sig!==VSIG,y=window.scrollY,previousPage=VSIG.split('|')[0];VSIG=sig;ensureNums();ensureEx();if(typeof AT2!=='undefined')AT2.warm();if(U.w==null)U.w=wk0();$('#dt').textContent=new Date().toLocaleDateString('fa-IR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
  const cur=U.p==='sp'?'stu':U.p;$('#nv').innerHTML=PG.map(([k,t,i])=>`<button class="${cur===k?'on':''}" onclick="go('${k}')" aria-label="${t}">${ic(i)}<span>${t}</span>${k==='exm'&&SV.pend()?`<i class="bdg">${n(SV.pend())}</i>`:''}${k==='day'&&AT2.badge()?`<i class="bdg">${n(AT2.badge())}</i>`:''}</button>`).join('');
  $('#pt').textContent=U.p==='sp'?'پروفایل دانش‌آموز':(PG.find(p=>p[0]===U.p)||[,''])[1];
  if(nav){$('#app').classList.remove('in');void ($('#app') as any).offsetWidth;$('#app').classList.add('in')}
@@ -492,10 +493,11 @@ async function xpng(){const sv=U.sv&&D.students.find(s=>s.id===U.sv&&s.cls===U.x
 const SV=mkServer({get D(){return D},CL,annActive:()=>annActive(),toast,letterC,bg:()=>bgDraw(),sexams,save,draw:()=>draw(),esc,n,saveFile,ensureEx,tt,status,letter,dateOf,wk0,commit:(f:any)=>commit(f),CFG,U});
 const CALLS=mkCalls({get D(){return D},U,CL,SV,esc,n,byNum,save,draw:()=>draw(),bg:()=>bgDraw(),toast,op,dlf:(...a:any[])=>(dlf as any)(...a)});
 const TR=mkTrend({get D(){return D},U,esc,n,n1,draw:()=>draw()});
-const EX=mkExams({TR,get D(){return D},U,save,draw:()=>draw(),bg:()=>bgDraw(),esc,n,n1,avg,line,hue,spark,CL,byNum,today,SV,scn,schp:()=>schp(),FILES:()=>FILES,dlf:(...a:any[])=>(dlf as any)(...a),toast});
-const AT2=mkAttend({get D(){return D},U,letterC,bg:()=>bgDraw(),esc,n,save,draw:()=>draw(),toast,dateOf,wk0,mid,DAYN,GL,GC,CL,letter,status,subj,byNum,SV,dlf:(...a:any[])=>(dlf as any)(...a),bars,op,sf,callsChanged:()=>CALLS.invalidate()});
+const PLA=mkPlanAdmin({get D(){return D},U,save,draw:()=>draw(),esc,n,toast});
+const EX=mkExams({TR,get D(){return D},U,save,draw:()=>draw(),bg:()=>bgDraw(),plan:()=>PLA.page(),esc,n,n1,avg,line,hue,spark,CL,byNum,today,SV,scn,schp:()=>schp(),FILES:()=>FILES,dlf:(...a:any[])=>(dlf as any)(...a),toast});
+const AT2=mkAttend({get D(){return D},U,letterC,bg:()=>bgDraw(),esc,n,save,draw:()=>draw(),toast,dateOf,wk0,mid,DAYN,GL,GC,CL,letter,status,subj,byNum,SV,dlf:(...a:any[])=>(dlf as any)(...a),bars,op,sf,callsChanged:()=>CALLS.invalidate(),callsLocal:(r:any)=>CALLS.local(r)});
 AP=SV.autoPub;
-Object.assign(W,SV.h,EX.h,AT2.h,TR.h,CALLS.h,{CALL_student:(id:string)=>CALLS.openForStudent(id)});
+Object.assign(W,SV.h,EX.h,AT2.h,TR.h,CALLS.h,PLA.h,{CALL_student:(id:string)=>CALLS.openForStudent(id)});
 SV.init();
 /* ---------- آزمون‌های مدرسه (فقط نمره‌ی هر درس؛ بدون معدل) ---------- */
 function mkSch(t:string,date:string,c:string){const d=nidClean0(date.trim());if(!t.trim()||!/^\d{4}\/\d{2}\/\d{2}$/.test(d)||!j2iso(d)){toast('عنوان و تاریخ معتبر وارد کنید');return false}const id='h'+Date.now().toString(36);ensureSch().exams.push({id,title:t.trim(),date:d,cls:c,lessons:[],sc:{}});U.sx=id;save();return true}

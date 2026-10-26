@@ -1,6 +1,7 @@
 // حضور و غیاب (سمت مدیر): «مرکز فرمان روز» + تب غیبت‌ها در پروفایل هر دانش‌آموز.
 // نماینده‌ی کلاس غیبت را ثبت می‌کند (روی سرور)؛ مدیر اینجا می‌بیند، شرح می‌نویسد و با والدین تماس می‌گیرد.
 import { sb } from './supa';
+import { send, queue, online, down, cacheGet, cacheSet, withTimeout, retryable, flush, pending, onSynced, markDown } from './offq';
 import { mkAttGrid } from './attgrid';
 
 export function mkAttend(A: any) {
@@ -22,6 +23,33 @@ export function mkAttend(A: any) {
   const periodNoteKey = (day: string, cl: string, period: number) => `${day}|${cl}|${period}`;
   const periodNotes = () => (D().dayNotes || {}) as Record<string, { note: string; w: number; d: number; cl: string; period: number }>;
   const noteDrafts: Record<string, string> = {};
+  // بدون اینترنت هم قابل استفاده است (از کش محلی؛ تغییرها در صف می‌مانند)
+  const usable = () => A.SV.isMgr() || !!(window as any).__OFFLINE;
+  function recount(day: string, sid?: string) {
+    AT.cnt = { ...AT.cnt, [day]: new Set(AT.rows.filter((r: any) => r.day === day && r.status === 'absent').map((r: any) => r.student_id)).size };
+    if (sid) { const s = (AT.hist[sid] = AT.hist[sid] || new Set()); if (AT.rows.some((r: any) => r.student_id === sid && r.day === day)) s.add(day); else s.delete(day); }
+  }
+  // همان کاری که سرور می‌کند، روی نسخه‌ی محلی (وقتی تغییر در صف مانده)
+  function applyAbs(sid: string, cls: string, day: string, period: number, status: string) {
+    AT.rows = AT.rows.filter((r: any) => !(r.student_id === sid && r.day === day && r.period === period));
+    if (status === 'absent' || status === 'late') AT.rows.push({ student_id: sid, cls, day, period, status, marked_by: null, marked_at: new Date().toISOString() });
+    recount(day, sid); AT.stale = true;
+  }
+  function applySess(cls: string, day: string, period: number) {
+    AT.sess = AT.sess.filter((x: any) => !(x.cls === cls && x.day === day && x.period === period));
+    AT.sess.push({ cls, day, period, marked_by: null, marked_at: new Date().toISOString(), by_role: 'admin' }); AT.stale = true;
+  }
+  function persistAtt(): Promise<any> {
+    const key = AT.loaded; if (!key) return Promise.resolve();
+    return Promise.all([cacheSet('att:' + key, { rows: AT.rows, sess: AT.sess, notes: AT.notes, at: AT.srvAt || 0 }),
+      cacheSet('att:hist', { hist: Object.fromEntries(Object.entries(AT.hist || {}).map(([k, v]: any) => [k, [...v]])), cnt: AT.cnt })]);
+  }
+  async function fromCache(key: string, days: string[]) {
+    const c = await cacheGet('att:' + key), h = await cacheGet('att:hist');
+    AT.rows = c?.rows || []; AT.sess = c?.sess || []; AT.notes = c?.notes || []; AT.days = days; AT.loaded = key; AT.stale = true; AT.srvAt = c?.at || 0;
+    AT.hist = Object.fromEntries(Object.entries(h?.hist || {}).map(([k, v]: any) => [k, new Set(v)])); AT.cnt = h?.cnt || {};
+  }
+  const staleBar = () => AT.stale ? `<div class="c" style="margin-bottom:10px;border-inline-start:5px solid #f59e0b">📴 ${AT.srvAt ? `بدون اتصال به سرور — آخرین دریافت: <b>${new Date(AT.srvAt).toLocaleString('fa-IR', { timeZone: 'Asia/Tehran', dateStyle: 'medium', timeStyle: 'short' })}</b>. غیبت‌هایی که نماینده‌ها بعد از آن ثبت کرده‌اند بعد از اتصال دیده می‌شود.` : 'هنوز داده‌ای از سرور برای این هفته روی این دستگاه نیست.'} هر چه ثبت کنید ذخیره می‌شود و بعد از اتصال به سرور فرستاده می‌شود${pending() ? ` (<b>${n(pending())}</b> تغییر منتظر ارسال)` : ''}.</div>` : '';
 
   /* ---------- روز انتخاب‌شده ---------- */
   function initDay() {
@@ -37,23 +65,29 @@ export function mkAttend(A: any) {
 
   /* ---------- بارگیری از سرور (کل هفته‌ی انتخاب‌شده) ---------- */
   async function load(force?: boolean) {
-    if (!A.SV.isMgr()) return;
+    if (!usable()) return;
     initDay(); const days = weekDays(AT.w), key = days[0];
     if (!force && AT.tried === key && Date.now() - AT.at < 20000) return;
     if (AT.busy) return; AT.busy = true; AT.err = ''; AT.tried = key; AT.at = Date.now();
     try {
-      const [a, s, nn, hh] = await Promise.all([
+      if (!online() || down()) throw { __net: true, message: 'offline' };
+      await flush(); if (pending()) throw { __net: true, message: 'pending' }; // تغییرهای آفلاین هنوز نرفته؛ نسخه‌ی محلی را نشان بده
+      const [a, s, nn, hh] = await withTimeout(Promise.all([
         sb.from('attendance').select('*').in('day', days), sb.from('att_sessions').select('*').in('day', days), sb.from('att_notes').select('*').in('day', days),
-        sb.from('attendance').select('student_id,day,status').limit(20000)]);
+        sb.from('attendance').select('student_id,day,status').limit(20000)]));
       const bad = [a, s, nn].find((x: any) => x.error); if (bad) throw bad.error;
       AT.rows = a.data || []; AT.sess = s.data || []; AT.notes = nn.data || []; AT.days = days;
       const m: any = {}, cn: any = {}; (hh.data || []).forEach((r: any) => { (m[r.student_id] = m[r.student_id] || new Set()).add(r.day); if (r.status === 'absent') (cn[r.day] = cn[r.day] || new Set()).add(r.student_id); });
       AT.hist = m; AT.cnt = Object.fromEntries(Object.keys(cn).map((k) => [k, cn[k].size])); AT.loaded = key;
-    } catch (e: any) { AT.err = errMsg(e); }
+      AT.srvAt = Date.now(); AT.stale = false; persistAtt();
+    } catch (e: any) {
+      if (retryable(e)) { if (!(AT.stale && AT.loaded === key)) await fromCache(key, days); } else AT.err = errMsg(e);
+    }
     AT.busy = false; AT.at = Date.now(); (A.bg || A.draw)();
   }
-  function warm() { if (AT.warmed || !A.SV.isMgr()) return; AT.warmed = true; load(true); }
-  setInterval(() => { const ae = document.activeElement as HTMLElement | null; if (U.p === 'day' && A.SV.isMgr() && !(ae && /TEXTAREA|INPUT|SELECT/.test(ae.tagName))) load(true); }, 30000);
+  function warm() { if (AT.warmed || !usable()) return; AT.warmed = true; load(true); }
+  onSynced(() => { if (usable()) load(true); });
+  setInterval(() => { const ae = document.activeElement as HTMLElement | null; if (U.p === 'day' && usable() && !(AT.stale && (!online() || down())) && !(ae && /TEXTAREA|INPUT|SELECT/.test(ae.tagName))) load(true); }, 30000);
 
   /* ---------- مدل روز ---------- */
   function model() {
@@ -81,7 +115,7 @@ export function mkAttend(A: any) {
     const strip = [0, 1, 2, 3].map((dd) => { const dy = iso(w, dd), ab = new Set(AT.rows.filter((r: any) => r.day === dy && r.status === 'absent').map((r: any) => r.student_id)).size, sc = AT.sess.filter((x: any) => x.day === dy).length; const Lz = [...new Set<string>(A.CL.map((c: string) => A.letterC(c, dd, w)))]; return { d: dd, day: dy, ab, sc, L: Lz.join('·'), L0: Lz[0] }; });
     return { w, d, day, L, L0: Ls[0], per, ok, classes, abs, needs, exemptCount, done, total, unmarked: total - done, absN: absSt.size, lateN: lateSt.size, strip };
   }
-  const badge = () => { if (!A.SV.isMgr() || !AT.days?.includes(todayIso())) return 0; const t = todayIso(), sids = new Set<string>(AT.rows.filter((r: any) => r.day === t).map((r: any) => r.student_id)); let c = 0; sids.forEach((sid: string) => { const nt = AT.notes.find((q: any) => q.student_id === sid && q.day === t); if (!nt?.note && !nt?.called) c++; }); return c; };
+  const badge = () => { if (!usable() || !AT.days?.includes(todayIso())) return 0; const t = todayIso(), sids = new Set<string>(AT.rows.filter((r: any) => r.day === t).map((r: any) => r.student_id)); let c = 0; sids.forEach((sid: string) => { const nt = AT.notes.find((q: any) => q.student_id === sid && q.day === t); if (!nt?.note && !nt?.called) c++; }); return c; };
 
   /* ---------- اجزای نمایش ---------- */
   const mon = (day: string) => new Date(day + 'T12:00:00').toLocaleDateString('fa-IR', { month: 'long' });
@@ -150,7 +184,26 @@ export function mkAttend(A: any) {
       })();
       const key = periodNoteKey(M.day, curCl(), ap), saved = noteDrafts[key] ?? periodNotes()[key]?.note ?? '';
       return `${status}<div class="c dynote" style="margin-bottom:10px"><label for="period-note"><b>شرح زنگ ${n(ap)}</b> <span class="m">${esc(curCl())} · ${esc(A.subj(curCl(), M.d, ap - 1))}</span></label><textarea id="period-note" maxlength="5000" placeholder="یادداشت این زنگ را بنویسید…" style="margin-top:8px;min-height:76px" oninput="AT_periodDraft(this.value)">${esc(saved)}</textarea><div class="tb" style="margin:6px 0 0"><button class="btn p" onclick="AT_periodNote()">ذخیره‌ی شرح</button><span class="m">برای حذف، متن را پاک و ذخیره کنید.</span></div></div>`; },
-    save: async (ps: number[], rows: any[]) => { const { error } = await sb.rpc('staff_save_attendance', { p_day: iso(AT.w, AT.d), p_cls: curCl(), p_periods: ps, p_rows: rows }); if (error) return errMsg(error); delete EDS[dayKey()]; await load(true); return null; },
+    save: async (ps: number[], rows: any[]) => {
+      const day = iso(AT.w, AT.d), cl = curCl();
+      if (online() && !down()) {
+        let error: any; try { ({ error } = await withTimeout<any>(sb.rpc('staff_save_attendance', { p_day: day, p_cls: cl, p_periods: ps, p_rows: rows }))); } catch (e) { error = e; }
+        if (!error) { delete EDS[dayKey()]; await load(true); return null; }
+        if (!retryable(error)) return errMsg(error);
+        markDown();
+      }
+      // بدون اینترنت: فقط سلول‌هایی که واقعاً عوض شده‌اند + ثبت‌شدنِ زنگ‌ها در صف می‌رود (تا غیبتی که نماینده در این فاصله ثبت کرده پاک نشود)
+      const ids = D().students.filter((s: any) => s.cls === cl).map((s: any) => sidOf(s.id)).filter(Boolean);
+      for (const per of ps) {
+        const want: any = {}; rows.filter((r: any) => r.period === per).forEach((r: any) => { want[r.student_id] = r.status; });
+        for (const sid of ids) {
+          const cur = AT.rows.find((r: any) => r.student_id === sid && r.day === day && r.period === per)?.status || 'present', w = want[sid] || 'present';
+          if (cur !== w) { await queue({ k: 'rpc', fn: 'admin_set_attendance', args: { p_student: sid, p_day: day, p_period: per, p_status: w } }); applyAbs(sid, cl, day, per, w); }
+        }
+        await queue({ k: 'upsert', table: 'att_sessions', rows: [{ cls: cl, day, period: per, marked_by: null, marked_at: new Date().toISOString(), by_role: 'admin' }], onConflict: 'cls,day,period' }); applySess(cl, day, per);
+      }
+      delete EDS[dayKey()]; await persistAtt(); draw(); return null;
+    },
   });
   function perTab(M: any) {
     const cl = curCl(), clsSeg = `<div class="seg">${A.CL.map((x: string) => `<button class="${x === cl ? 'on' : ''}" onclick="AT_pc('${x}')">${x}</button>`).join('')}</div>`;
@@ -170,7 +223,7 @@ export function mkAttend(A: any) {
   /* ---------- صفحه‌ی «روز» ---------- */
   function page() {
     initDay();
-    if (!A.SV.isMgr()) return `<div class="c" style="text-align:center;padding:26px"><h3>🗓 مرکز روز</h3><p class="m">برای دیدن غیبت‌ها و وضعیت کلاس‌ها اول به سرور وارد شوید.</p><button class="btn p" onclick="go('srv')">ورود به بخش سرور</button></div>`;
+    if (!usable()) return `<div class="c" style="text-align:center;padding:26px"><h3>🗓 مرکز روز</h3><p class="m">برای دیدن غیبت‌ها و وضعیت کلاس‌ها اول به سرور وارد شوید.</p><button class="btn p" onclick="go('srv')">ورود به بخش سرور</button></div>`;
     load(false);
     const M = model(), tab = AT.tab || 'abs';
     if (AT.err) return `${weekStrip(M)}<div class="c dn">${esc(AT.err)}</div>`;
@@ -178,7 +231,7 @@ export function mkAttend(A: any) {
     const needN = M.abs.filter((a: any) => M.needs(a)).length, T = [['abs', `🚨 غایبین${M.abs.length ? ` <i class="bdg" style="display:inline-grid;margin:0 4px">${n(M.abs.length)}</i>` : ''}`], ['per', '🏫 زنگ‌ها'], ['ex', '🎓 معافیت‌ها']];
     const body: any = { abs: absTab, per: perTab, ex: exTab };
     const noAcc = D().students.filter((s: any) => !sidOf(s.id)).length;
-    return `${hero(M)}${weekStrip(M)}${heat(M)}${kpis(M)}
+    return `${staleBar()}${hero(M)}${weekStrip(M)}${heat(M)}${kpis(M)}
     <div class="seg xtabs">${T.map(([k, t]) => `<button class="${tab === k ? 'on' : ''}" onclick="AT_tab('${k}')">${t}</button>`).join('')}</div>
     ${(body[tab] || absTab)(M)}
     ${noAcc ? `<p class="m" style="margin-top:10px">⚠ ${n(noAcc)} دانش‌آموز هنوز حساب پنل ندارند؛ غیبت‌شان را نماینده نمی‌تواند ثبت کند.</p>` : ''}
@@ -189,8 +242,15 @@ export function mkAttend(A: any) {
   async function loadStu(sid: string, force?: boolean) {
     const c = AT.stu[sid]; if (c && !force && Date.now() - c.at < 60000) return; if (c?.busy) return;
     AT.stu[sid] = { ...(c || {}), busy: true, at: Date.now() };
-    const [a, nn] = await Promise.all([sb.from('attendance').select('*').eq('student_id', sid).order('day', { ascending: false }), sb.from('att_notes').select('*').eq('student_id', sid)]);
-    AT.stu[sid] = { rows: a.data || [], notes: nn.data || [], at: Date.now(), err: a.error ? errMsg(a.error) : '', busy: false };
+    let a: any, nn: any;
+    try { if (!online() || down()) throw { __net: true, message: 'offline' }; [a, nn] = await withTimeout(Promise.all([sb.from('attendance').select('*').eq('student_id', sid).order('day', { ascending: false }), sb.from('att_notes').select('*').eq('student_id', sid)])); } catch (e) { a = { error: e }; nn = {}; }
+    if (a.error && retryable(a.error)) {
+      const cc = await cacheGet('stu:' + sid), wk = new Set<string>(AT.days || []);   // آخرین کش + تغییرهای همین هفته که آفلاین ثبت شده
+      AT.stu[sid] = { rows: [...(cc?.rows || []).filter((r: any) => !wk.has(r.day)), ...AT.rows.filter((r: any) => r.student_id === sid)], notes: [...(cc?.notes || []).filter((r: any) => !wk.has(r.day)), ...AT.notes.filter((r: any) => r.student_id === sid)], at: Date.now(), err: '', busy: false, stale: true };
+    } else {
+      AT.stu[sid] = { rows: a.data || [], notes: nn.data || [], at: Date.now(), err: a.error ? errMsg(a.error) : '', busy: false };
+      if (!a.error) cacheSet('stu:' + sid, { rows: a.data || [], notes: nn.data || [] });
+    }
     if (U.p === 'sp') draw();
   }
   function groups(sid: string) {
@@ -200,14 +260,14 @@ export function mkAttend(A: any) {
       return { day, rs, note: nt?.note || '', called: !!nt?.called, hasAbs: rs.some((r: any) => r.status === 'absent') }; });
   }
   function kpi(s: any) {
-    const sid = sidOf(s.id); if (!A.SV.isMgr() || !sid) return '';
+    const sid = sidOf(s.id); if (!usable() || !sid) return '';
     loadStu(sid); const c = AT.stu[sid];
     const g = c?.rows ? groups(sid).filter((x: any) => x.hasAbs) : null;
     return `<div class="c k" style="cursor:pointer" onclick="U.stab='abs';draw()"><b class="${g && g.length ? 'dn' : ''}">${g ? n(g.length) : '…'}</b><span>روز غیبت ←</span></div>`;
   }
   function stuTab(s: any) {
     const sid = sidOf(s.id);
-    if (!A.SV.isMgr()) return `<div class="c m">برای دیدن غیبت‌ها به بخش سرور وارد شوید.</div>`;
+    if (!usable()) return `<div class="c m">برای دیدن غیبت‌ها به بخش سرور وارد شوید.</div>`;
     if (!sid) return `<div class="c m">این دانش‌آموز حساب پنل ندارد (بخش سرور)؛ برای ثبت غیبت اول حساب بسازید.</div>`;
     loadStu(sid); const c = AT.stu[sid];
     if (!c?.rows) return `<div class="c m" style="text-align:center">${c?.err ? esc(c.err) : '⏳ در حال دریافت…'}</div>`;
@@ -228,12 +288,13 @@ export function mkAttend(A: any) {
   /* ---------- عملیات ---------- */
   async function saveNote(sid: string, day: string) {
     const k = `${sid}_${day}`, note = val('nt_' + k).trim(), called = chk('cl_' + k);
-    const { error } = await sb.from('att_notes').upsert({ student_id: sid, day, note, called, updated_at: new Date().toISOString() }, { onConflict: 'student_id,day' });
-    if (error) { A.toast('خطا: ' + errMsg(error)); return; }
+    const row = { student_id: sid, day, note, called, updated_at: new Date().toISOString() };
+    const r = await send({ k: 'upsert', table: 'att_notes', rows: [row], onConflict: 'student_id,day' });
+    if (r.error) { A.toast('خطا: ' + r.error); return; }
     const put = (arr: any[]) => { const i = arr.findIndex((q: any) => q.student_id === sid && q.day === day); const o = { student_id: sid, day, note, called }; if (i >= 0) arr[i] = { ...arr[i], ...o }; else arr.push(o); };
     put(AT.notes); if (AT.stu[sid]?.notes) put(AT.stu[sid].notes);
-    A.callsChanged?.();
-    A.toast('شرح ذخیره شد ✓'); draw();
+    A.callsLocal?.(row); A.callsChanged?.(); if (r.queued) AT.stale = true; await persistAtt();
+    A.toast(r.queued ? 'شرح ذخیره شد (آفلاین؛ بعداً به سرور فرستاده می‌شود) ✓' : 'شرح ذخیره شد ✓'); draw();
   }
   function savePeriodNote() {
     const day = iso(AT.w, AT.d), cl = curCl(), period = G.st.ap, key = periodNoteKey(day, cl, period), note = val('period-note').trim();
@@ -250,8 +311,9 @@ export function mkAttend(A: any) {
   }
   async function setCell(lid: string, p: number, st: string) {
     const sid = sidOf(lid); if (!sid) return; document.getElementById('md')!.classList.remove('on');
-    const { error } = await sb.rpc('admin_set_attendance', { p_student: sid, p_day: iso(AT.w, AT.d), p_period: p + 1, p_status: st });
-    if (error) { A.toast('خطا: ' + errMsg(error)); return; }
+    const day = iso(AT.w, AT.d), r = await send({ k: 'rpc', fn: 'admin_set_attendance', args: { p_student: sid, p_day: day, p_period: p + 1, p_status: st } });
+    if (r.error) { A.toast('خطا: ' + r.error); return; }
+    if (r.queued) { applyAbs(sid, stuBy(lid).cls, day, p + 1, st); await persistAtt(); A.toast('ثبت شد (آفلاین؛ بعداً به سرور فرستاده می‌شود)'); draw(); return; }
     await load(true);
   }
   function cellModal(lid: string, p: number) {
@@ -265,7 +327,9 @@ export function mkAttend(A: any) {
   }
   async function allDay(lid: string) {
     const sid = sidOf(lid), M = model(), x = M.classes.flatMap((c: any) => c.ss).find((q: any) => q.s.id === lid); if (!sid) return; document.getElementById('md')!.classList.remove('on');
-    for (let p = 0; p < M.per; p++) if (!x.cells[p].ex) { const { error } = await sb.rpc('admin_set_attendance', { p_student: sid, p_day: M.day, p_period: p + 1, p_status: 'absent' }); if (error) { A.toast('خطا: ' + errMsg(error)); break; } }
+    let q = false;
+    for (let p = 0; p < M.per; p++) if (!x.cells[p].ex) { const r = await send({ k: 'rpc', fn: 'admin_set_attendance', args: { p_student: sid, p_day: M.day, p_period: p + 1, p_status: 'absent' } }); if (r.error) { A.toast('خطا: ' + r.error); break; } if (r.queued) q = true; applyAbs(sid, x.s.cls, M.day, p + 1, 'absent'); }
+    if (q) { await persistAtt(); A.toast('ثبت شد (آفلاین؛ بعداً به سرور فرستاده می‌شود)'); draw(); return; }
     await load(true);
   }
   function csv() {
