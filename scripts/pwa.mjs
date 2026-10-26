@@ -35,6 +35,7 @@ const version = `ss-${app}-${hash.digest('hex').slice(0, 10)}`;
 const precache = ['./', ...files.map((f) => './' + f)];
 const sw = `// ساخته‌شده خودکار توسط scripts/pwa.mjs — دستی ویرایش نکنید
 const CACHE = ${JSON.stringify(version)}, PREFIX = ${JSON.stringify('ss-' + app + '-')}, FILES = ${JSON.stringify(precache)};
+const BASE = new URL(self.registration.scope).pathname, SKIP = ${JSON.stringify(A.skip.map((s) => s.replace(/\/$/, '')))};
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k.startsWith(PREFIX) && k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
@@ -43,6 +44,9 @@ self.addEventListener('fetch', (e) => {
   const r = e.request, u = new URL(r.url);
   // فقط فایل‌های همین سایت؛ درخواست‌های سرور (Supabase) و POST هرگز کش نمی‌شوند
   if (r.method !== 'GET' || u.origin !== self.location.origin) return;
+  // آدرس‌های پنل مدیر (/admin) را این service worker هرگز دست نمی‌زند؛ پنل مدیر service worker و کش مخصوص خودش را دارد.
+  const rel = u.pathname.startsWith(BASE) ? u.pathname.slice(BASE.length) : u.pathname;
+  if (SKIP.some((s) => rel === s || rel.startsWith(s + '/'))) return;
   if (r.mode === 'navigate') {
     // صفحه‌ی اصلی بلافاصله از حافظه‌ی دستگاه باز می‌شود (بدون انتظار برای شبکه) و در پس‌زمینه به‌روز می‌شود.
     e.respondWith(caches.match('./').then((m) => { const net = fetch(r).then((res) => { if (res.ok) { const c = res.clone(); caches.open(CACHE).then((x) => x.put('./', c)); } return res; }); e.waitUntil(net.catch(() => 0)); return m || net.catch(() => caches.match('./index.html')); }));
