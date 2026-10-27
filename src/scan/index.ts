@@ -71,7 +71,12 @@ export async function importMaz(file: File, cfg: ExamSettings, roster: string[] 
 
 
 // ---------------------------------------------------------------- Qalamchi (Kanoon)
-const BASES = ['حسابان', 'هندسه', 'آمار و احتمال', 'گسسته', 'ریاضی', 'فیزیک', 'شیمی', 'زیست‌شناسی', 'زیست', 'ادبیات', 'عربی', 'دین و زندگی', 'زبان انگلیسی', 'اقتصاد', 'تاریخ', 'جغرافیا', 'منطق', 'فلسفه', 'علوم و اجتماعی', 'روانشناسی'].map(squash);
+// نام درس‌ها همان‌طور که باید دیده شوند (رشته‌ی ریاضی و تجربی و عمومی). «زیست» جدا هم هست تا اگر بخش مدرسه «زیست» نام دارد پیدا شود.
+const LESSON_NAMES = ['حسابان', 'هندسه', 'آمار و احتمال', 'گسسته', 'ریاضی', 'فیزیک', 'شیمی', 'زیست‌شناسی', 'زمین‌شناسی', 'ادبیات', 'عربی', 'دین و زندگی', 'زبان انگلیسی', 'اقتصاد', 'تاریخ', 'جغرافیا', 'منطق', 'فلسفه', 'علوم و اجتماعی', 'روانشناسی'];
+const BASES = [...LESSON_NAMES, 'زیست'].map(squash);
+const DISPLAY = new Map(LESSON_NAMES.map((n) => [squash(n), n]));
+// درسی که در کارنامه «زیست‌شناسی» نوشته شده، در بخش «زیست» مدرسه حساب می‌شود
+const SECTION_OF: Record<string, string> = { [squash('زیست‌شناسی')]: squash('زیست') };
 const bareName = (s: string) => squash(s).replace(/\d+$/, '');
 const matchBase = (base: string, cands: string[]): string | null => {
   let best: { c: string; d: number } | null = null;
@@ -81,12 +86,20 @@ const matchBase = (base: string, cands: string[]): string | null => {
 // grade → number in the planner's part names (حسابان ۱ = یازدهم, هندسه ۱ = دهم ...)
 const gradeIndex = (base: string, g: number | null): number | null => g === null ? null : base === 'حسابان' ? (g === 11 ? 1 : g === 12 ? 2 : null) : g - 9;
 
+const gradeWordOf = (g: number | null) => (g === 12 ? 'دوازدهم' : g === 11 ? 'یازدهم' : g === 10 ? 'دهم' : '');
+/** lesson name for display: letters that the PDF lost («ف�زیک») are repaired from the known lesson names */
+export function lessonLabel(ls: QLesson, cfg: ExamSettings): string {
+  const hit = matchBase(ls.base, [...BASES, ...cfg.sections.map((s) => bareName(s.name))]);
+  const name = hit ? DISPLAY.get(hit) || cfg.sections.find((s) => bareName(s.name) === hit)?.name || '' : '';
+  return name ? `${name} ${gradeWordOf(ls.grade)}`.trim() : ls.label.replace(/\ufffd/g, '');
+}
 /** where in the user's exam settings does a Qalamchi lesson belong? */
 export function placeLesson(ls: QLesson, cfg: ExamSettings): { sectionName: string; partName: string; recognised: boolean } {
   const cand = [...BASES, ...cfg.sections.map((s) => bareName(s.name))];
   const base = matchBase(ls.base, cand) || ls.base;
+  const sec = SECTION_OF[base] || base;
   const idx = gradeIndex(base, ls.grade);
-  const gradeWord = ls.grade === 12 ? 'دوازدهم' : ls.grade === 11 ? 'یازدهم' : ls.grade === 10 ? 'دهم' : '';
+  const gradeWord = gradeWordOf(ls.grade);
   const withGrade = (n: string) => `${n} ${gradeWord}`.trim();
   const lastNum = (n: string) => { const m = /(\d+)\s*$/.exec(norm(n)); return m ? +m[1] : null; };
   // (a) a part/group named like the lesson (حسابان, هندسه, گسسته, آمار و احتمال)
@@ -97,7 +110,7 @@ export function placeLesson(ls: QLesson, cfg: ExamSettings): { sectionName: stri
   }
   // (b) a section named like the lesson, with parts «فیزیک ۱ / ۲ / ۳»
   for (const s of cfg.sections) {
-    if (bareName(s.name) !== base) continue;
+    if (bareName(s.name) !== sec) continue;
     const k = s.parts.find((p) => bareName(p.name) === base && lastNum(p.name) === idx);
     return { sectionName: s.name, partName: k ? k.name : s.parts.length || idx === null ? withGrade(s.name) : '', recognised: true };
   }
@@ -114,7 +127,7 @@ export function importQalamchi(rep: ReturnType<typeof parseQalamchi>, cfg: ExamS
   const rows: ImportRow[] = rep.lessons.map((ls, i) => {
     const pl = placeLesson(ls, cfg);
     if (pl.sectionName) used.add(pl.sectionName);
-    return { index: i, label: ls.label, sectionName: pl.sectionName, partName: pl.partName, n: ls.correct + ls.wrong + ls.blank, c: ls.correct, w: ls.wrong, level: ls.level, countryRank: null, recognised: pl.recognised };
+    return { index: i, label: lessonLabel(ls, cfg), sectionName: pl.sectionName, partName: pl.partName, n: ls.correct + ls.wrong + ls.blank, c: ls.correct, w: ls.wrong, level: ls.level, countryRank: null, recognised: pl.recognised };
   });
   const free = cfg.sections.map((s) => s.name).filter((n) => !used.has(n));
   rows.forEach((r) => { if (!r.sectionName) r.sectionName = r.label?.split(' ')[0] || free.shift() || `درس ${r.index + 1}`; });

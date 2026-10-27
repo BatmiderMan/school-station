@@ -14,7 +14,7 @@ const n = (v: any) => (v == null || isNaN(v) ? '—' : Math.round(v).toLocaleStr
 const n1 = (v: any) => (v == null || isNaN(v) ? '—' : (Math.round(v * 10) / 10).toLocaleString('fa-IR'));
 const DAYN = ['شنبه', 'یکشنبه', 'سه‌شنبه', 'چهارشنبه'], GL = ['A', 'B', 'C', 'D'], GC = ['#6366f1', '#10b981', '#f59e0b', '#ec4899'];
 const STN: any = { g: 'معاف (گروه)', f: 'معاف (معلم)', p: 'معاف (پیشرفت)' };
-const SUBJ = ['ریاضی', 'فیزیک', 'شیمی', 'زیست', 'ادبیات', 'عربی', 'دین و زندگی', 'زبان'];
+const SUBJ = ['ریاضی', 'فیزیک', 'شیمی', 'زیست', 'ادبیات', 'عربی', 'دین و زندگی', 'زبان', 'زمین شناسی'];
 const CFG: ExamSettings = { sections: SUBJ.map((name, i) => ({ id: 'u' + i, name, color: '#888', n: 0, parts: [] })) };
 const T: any = { con: [], ann: [], xi: 'ماز', sch: [], u: null, me: null, exams: [], cal: [], pend: 0, p: 'home', wi: null, open: null, prev: null, err: '', busy: false, ok: '', login: '', rc: [], rw: 0, rd: 0, rerr: '', ab: [], at: null, atErr: '', ae: {}, ab0: {}, atBusy: false, ap: 0, plan: null, plk: 'all', sync: 'ok', loadErr: '' };
 const W: any = window;
@@ -129,7 +129,7 @@ function draw() {
 const go = (p: string) => { closeStudentMenu(); T.p = p; T.ok = ''; T.err = ''; draw(); window.scrollTo(0, 0); };
 function loginView() {
   if (!cfgOk) return `<div class="c">اتصال به سرور تنظیم نشده است.</div>`;
-  if (T.u && T.loadErr) return `<div class="c" style="max-width:380px;margin:30px auto;text-align:center"><h3 style="font-size:18px">اتصال برقرار نشد</h3><p class="m">${T.loadErr === 'net' ? 'سرور در دسترس نیست یا اینترنت کند است. چند لحظه بعد دوباره تلاش کنید.' : esc(T.loadErr)}</p><div class="tb" style="justify-content:center"><button class="btn p" onclick="retryLoad()">تلاش دوباره</button><button class="btn" onclick="logout()">خروج</button></div></div>`;
+  if (T.u && T.loadErr) return `<div class="c" style="max-width:380px;margin:30px auto;text-align:center"><h3 style="font-size:18px">اتصال برقرار نشد</h3><p class="m">${T.loadErr === 'net' ? 'سرور در دسترس نیست یا اینترنت کند است. چند لحظه بعد دوباره تلاش کنید.' : esc(T.loadErr)}</p><div class="tb" style="justify-content:center"><button class="btn p" onclick="retryLoad()">تلاش دوباره</button><button class="btn" onclick="__diag()">بررسی اتصال</button><button class="btn" onclick="logout()">خروج</button></div></div>`;
   if (T.u) return `<div class="c">حساب شما هنوز به دانش‌آموزی متصل نشده. با مدیر مدرسه تماس بگیرید.<div class="tb" style="margin-top:8px"><button class="btn" onclick="logout()">خروج</button></div></div>`;
   return `<div class="c" style="max-width:360px;margin:30px auto"><h3 style="font-size:18px">ورود به پنل دانش‌آموز</h3><p class="m">نام کاربری و رمز را مدیر مدرسه به شما داده است.</p>${T.login ? `<p class="dn">${T.login}</p>` : ''}<div class="tb" style="flex-direction:column;align-items:stretch"><input id="lu" dir="ltr" placeholder="نام کاربری" autocapitalize="off"><input id="lp" dir="ltr" type="password" placeholder="رمز" onkeydown="if(event.key==='Enter')login()"><button class="btn p" onclick="login()" ${T.busy ? 'disabled' : ''}>${T.busy ? '…' : 'ورود'}</button></div></div>`;
 }

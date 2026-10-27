@@ -1,6 +1,8 @@
 // مرکز آزمون‌ها: همه‌ی کارهای مربوط به آزمون (دریافت کارنامه، نتایج هر آزمون، نتایج هر دانش‌آموز، مدیریت) در یک پنل.
 // داده‌ها همان D.exams قبلی هستند: { id, title, inst, date, res: { [studentId]: { level, rank, subj, raw, slv } } }
 
+import { buildSchoolXlsx } from './xlsx';
+
 export function mkExams(A: any) {
   const esc = A.esc, n = A.n, n1 = A.n1;
   const D = () => A.D;
@@ -33,7 +35,7 @@ export function mkExams(A: any) {
     refresh(false);
     const p = pend(), T = [['in', '📥 دریافت کارنامه' + (p ? ` <i class="bdg" style="display:inline-grid;margin:0 4px">${n(p)}</i>` : '')], ['ex', '📋 نتایج هر آزمون'], ['st', '👤 نتایج هر دانش‌آموز'], ['pl', '📅 برنامه‌ی آزمون‌ها'], ['mg', '🗂 مدیریت آزمون‌ها'], ['sch', '🏫 مدرسه']];
     const body: any = { in: receive, ex: byExam, st: byStu, pl: () => A.plan(), mg: manage, sch: () => A.schp() };
-    return `<div class="seg xtabs">${T.map(([k, t]) => `<button class="${X.tab === k ? 'on' : ''}" onclick="X_('tab','${k}')">${t}</button>`).join('')}</div>${(body[X.tab] || byExam)()}`;
+    return `<div class="tb" style="margin:0 0 8px"><span style="flex:1"></span><button class="btn" onclick="X_xlsx()" title="همه‌ی نتایج ثبت‌شده در برنامه، در قالب اکسل مدرسه (ریاضی/تجربی × قلم‌چی/ماز)">📊 خروجی اکسل (قالب مدرسه)</button></div><div class="seg xtabs">${T.map(([k, t]) => `<button class="${X.tab === k ? 'on' : ''}" onclick="X_('tab','${k}')">${t}</button>`).join('')}</div>${(body[X.tab] || byExam)()}`;
   }
 
   /* ---------- ۱) دریافت کارنامه ---------- */
@@ -134,6 +136,7 @@ export function mkExams(A: any) {
     xgo: (tab: string) => { X.tab = tab; A.U.p = 'exm'; draw(); },
     X_find: (name: string) => { const t = norm(name), s = D().students.find((x: any) => norm(x.name) === t) || D().students.find((x: any) => norm(x.name).includes(t)); if (s) { X.sid = s.id; X.open = null; draw(); } },
     X_csv: csvExam,
+    X_xlsx: () => { try { const bytes = buildSchoolXlsx(D(), A.CL); A.saveFile(`نتایج-آزمون-${new Date().toISOString().slice(0, 10)}.xlsx`, new Blob([bytes as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })); A.toast('فایل اکسل ساخته شد'); } catch (err: any) { alert('ساخت فایل اکسل ناموفق بود: ' + (err?.message || err)); } },
     X_quick: quickSave,
     X_new: () => { const t = val('xn_t').trim(); if (!t) { A.toast('عنوان را بنویسید'); return; } const id = 'e' + Date.now().toString(36); D().exams.push({ id, title: t, inst: val('xn_i'), date: val('xn_d').trim(), res: {} }); X.ex = id; X.edit = id; A.save(); draw(); },
     X_save: (id: string) => { const e = D().exams.find((x: any) => x.id === id); if (!e) return; e.title = val('xe_t').trim() || e.title; e.inst = val('xe_i'); e.date = val('xe_d').trim() || e.date; A.save(); draw(); A.toast('ذخیره شد'); },

@@ -15,7 +15,7 @@ export function start(){
 
 const CL:string[]=['ریاضی ۳۱۱','تجربی ۳۲۱','تجربی ۳۲۲'],CC=['var(--c2)','var(--c0)','var(--c1)'];
 const classOrder=(cl:string)=>{const i=CL.indexOf(cl);return i<0?CL.length:i};
-const SUBJ=['ریاضی','فیزیک','شیمی','زیست','ادبیات','عربی','دین و زندگی','زبان'];
+const SUBJ=['ریاضی','فیزیک','شیمی','زیست','ادبیات','عربی','دین و زندگی','زبان','زمین شناسی'];
 const K='school_station_v1';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -241,6 +241,8 @@ function fcard(f:FI){
 const rmf=id=>{FILES=FILES.filter(f=>f.id!==id);draw()};
 const sfs=(id,v)=>{FILES.find(f=>f.id===id).sid=v};
 function er(id,i,k,v){const r=FILES.find(f=>f.id===id).x.rows[i];const b=r.n-r.c-r.w;v=Math.max(0,+v||0);if(k==='c')r.c=v;else if(k==='w')r.w=v;r.n=r.c+r.w+(k==='b'?v:b)}
+// درصد هر درس به‌تفکیک (حسابان، هندسه، گسسته، …) برای خروجی اکسل نگه داشته می‌شود؛ پایه‌های دهم/یازدهم/دوازدهم یک درس حساب می‌شوند
+const lesKey=(s:string)=>{let k=String(s||'').normalize('NFKC').replace(/[يى]/g,'ی').replace(/ك/g,'ک').replace(/\u200c/g,' ').replace(/(دوازدهم|یازدهم|دهم)/g,'').replace(/[\d۰-۹]+/g,'').replace(/\s+/g,' ').trim();if(/^ریاضیات? ?گسسته?$/.test(k))k='گسسته';return k};
 function commit(f:FI):string|null{
  const x=f.x!;if(!f.sid)return 'دانش‌آموز انتخاب نشده';
  if(!/^\d{4}\/\d{2}\/\d{2}$/.test(x.date))return 'تاریخ را به شکل 1405/07/10 بنویسید';
@@ -250,7 +252,8 @@ function commit(f:FI):string|null{
  const subj={},raw={},slv={};
  x.rows.forEach((r,i)=>{const k=r.sectionName;const a=raw[k]||[0,0,0];raw[k]=[a[0]+r.c,a[1]+r.w,a[2]+(r.n-r.c-r.w)];slv[k]=slv[k]==null&&!(k in subj)?r.level:null;if(r.level==null)delete slv[k];if(!r.recognised&&f.sigs[i])rememberHeading(f.sigs[i],k);subj[k]=0});
  Object.keys(raw).forEach(k=>{const[c,w,b]=raw[k],t=c+w+b;subj[k]=t?Math.round((3*c-w)/(3*t)*1000)/10:0});
- e.res[f.sid]={level:x.level,rank:x.countryRank,subj,raw,slv};f.done=true;f.eid=e.id;U.ex=e.id;return null}
+ const lesA:any={};x.rows.forEach(r=>{const lb=r.label||r.partName;if(!lb)return;const k=lesKey(lb);if(!k)return;const a=lesA[k]||[0,0,0];lesA[k]=[a[0]+r.c,a[1]+r.w,a[2]+(r.n-r.c-r.w)]});const les:any={};Object.keys(lesA).forEach(k=>{const[c,w,b]=lesA[k],tt=c+w+b;if(tt)les[k]=Math.round((3*c-w)/(3*tt)*10000)/100});
+ e.res[f.sid]={level:x.level,rank:x.countryRank,subj,raw,slv,les};f.done=true;f.eid=e.id;U.ex=e.id;return null}
 function commit1(id){const f=FILES.find(q=>q.id===id)!;const m=commit(f);if(m)alert(m);else save();draw()}
 function commitAll(){const bad:string[]=[];FILES.filter(f=>f.st==='ok'&&!f.done).forEach(f=>{const m=commit(f);if(m)bad.push(f.file.name+': '+m)});save();draw();if(bad.length)alert('این‌ها ثبت نشدند:\n'+bad.join('\n'))}
 
@@ -494,7 +497,7 @@ const SV=mkServer({get D(){return D},CL,annActive:()=>annActive(),toast,letterC,
 const CALLS=mkCalls({get D(){return D},U,CL,SV,esc,n,byNum,save,draw:()=>draw(),bg:()=>bgDraw(),toast,op,dlf:(...a:any[])=>(dlf as any)(...a)});
 const TR=mkTrend({get D(){return D},U,esc,n,n1,draw:()=>draw()});
 const PLA=mkPlanAdmin({get D(){return D},U,save,draw:()=>draw(),esc,n,toast});
-const EX=mkExams({TR,get D(){return D},U,save,draw:()=>draw(),bg:()=>bgDraw(),plan:()=>PLA.page(),esc,n,n1,avg,line,hue,spark,CL,byNum,today,SV,scn,schp:()=>schp(),FILES:()=>FILES,dlf:(...a:any[])=>(dlf as any)(...a),toast});
+const EX=mkExams({saveFile,TR,get D(){return D},U,save,draw:()=>draw(),bg:()=>bgDraw(),plan:()=>PLA.page(),esc,n,n1,avg,line,hue,spark,CL,byNum,today,SV,scn,schp:()=>schp(),FILES:()=>FILES,dlf:(...a:any[])=>(dlf as any)(...a),toast});
 const AT2=mkAttend({get D(){return D},U,letterC,bg:()=>bgDraw(),esc,n,save,draw:()=>draw(),toast,dateOf,wk0,mid,DAYN,GL,GC,CL,letter,status,subj,byNum,SV,dlf:(...a:any[])=>(dlf as any)(...a),bars,op,sf,callsChanged:()=>CALLS.invalidate(),callsLocal:(r:any)=>CALLS.local(r)});
 AP=SV.autoPub;
 Object.assign(W,SV.h,EX.h,AT2.h,TR.h,CALLS.h,PLA.h,{CALL_student:(id:string)=>CALLS.openForStudent(id)});
