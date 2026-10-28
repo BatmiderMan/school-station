@@ -186,6 +186,41 @@ export function mkServer(A: any) {
     return { per: E.per, days: [0, 1, 2, 3].map((d) => ({ d, date: A.dateOf(w, d).toISOString().slice(0, 10), L: A.letterC(cls, d, w), cells: Array.from({ length: E.per }, (_, p) => ({ s: A.tt(cls)[d][p] || '—', t: A.status(lid, cls, w, d, p) })) })) };
   }
   const lastSig: Record<string, string> = {}; // آخرین نسخه‌ی ارسال‌شده‌ی هر ردیف؛ برای ارسال فقط موارد تغییرکرده
+  // دانش‌آموزانی که ردیف‌های نتیجه‌شان روی سرور در این نشست یک‌بار با فهرست فعلی پنل مقایسه شده است
+  const synced = new Set<string>();
+  /** نتیجه‌ای که در پنل مدیر پاک شد (یک نتیجه، یک آزمون، یا آزمونی که تاریخ/مؤسسه‌اش عوض شد) از پنل دانش‌آموز هم برداشته می‌شود */
+  async function dropStaleExams(studentIds: string[], wanted: Set<string>): Promise<number> {
+    const mine = new Set(studentIds), stale = new Map<string, Set<string>>(); // exam_key → دانش‌آموزان
+    const mark = (sid: string, ek: string) => { if (!stale.has(ek)) stale.set(ek, new Set()); stale.get(ek)!.add(sid); };
+    // ۱) ردیف‌هایی که همین نشست فرستاده‌ایم و دیگر در فهرست نیستند
+    for (const k of Object.keys(lastSig)) {
+      if (!k.startsWith('exams_pub|')) continue;
+      const i = k.indexOf('|', 10), sid = k.slice(10, i), ek = k.slice(i + 1);
+      if (mine.has(sid) && !wanted.has(`${sid}|${ek}`)) mark(sid, ek);
+    }
+    // ۲) اولین بار برای هر دانش‌آموز: ردیف‌های سرور را می‌خوانیم (شامل نتیجه‌هایی که قبل از این اصلاح روی سرور مانده‌اند)
+    const fresh = studentIds.filter((s) => !synced.has(s));
+    for (let i = 0; i < fresh.length; i += 80) {
+      const chunk = fresh.slice(i, i + 80);
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await sb.from('exams_pub').select('student_id,exam_key').in('student_id', chunk).order('student_id').order('exam_key').range(from, from + 999);
+        if (error) throw error;
+        for (const r of data || []) if (!wanted.has(`${r.student_id}|${r.exam_key}`)) mark(r.student_id, r.exam_key);
+        if (!data || data.length < 1000) break;
+      }
+    }
+    let n = 0;
+    for (const [ek, ids] of stale) {
+      const all = [...ids];
+      for (let i = 0; i < all.length; i += 80) {
+        const part = all.slice(i, i + 80), { error } = await sb.from('exams_pub').delete().eq('exam_key', ek).in('student_id', part);
+        if (error) throw error;
+        part.forEach((sid) => { delete lastSig[`exams_pub|${sid}|${ek}`]; }); n += part.length;
+      }
+    }
+    fresh.forEach((s) => synced.add(s));
+    return n;
+  }
   async function publish(lids?: string[]) {
     const acc = sd().accounts, list = (lids || Object.keys(acc)).filter((l) => acc[l] && stu(l)), ex: any[] = [], cal: any[] = [], w0 = A.wk0();
     list.forEach((l) => {
@@ -198,6 +233,9 @@ export function mkServer(A: any) {
       for (let i = 0; i < ch.length; i += 400) { const part = ch.slice(i, i + 400), { error } = await sb.from(t).upsert(part.map((x) => x.r), { onConflict: key }); if (error) throw error; part.forEach((x) => { lastSig[x.k] = x.v; }); }
     };
     await up('exams_pub', ex, 'student_id,exam_key'); await up('calendar_pub', cal, 'student_id,week_start');
+    S.exErr = ''; let removed = 0;
+    // اگر در پنل هیچ آزمونی نیست، احتمالاً داده‌ها هنوز بارگذاری نشده‌اند؛ برای احتیاط چیزی از سرور پاک نمی‌شود
+    try { if (A.D.exams.length) removed = await dropStaleExams(list.map((l) => acc[l].sid), new Set(ex.map((r) => `${r.student_id}|${r.exam_key}`))); } catch (e: any) { S.exErr = 'نتیجه‌های پاک‌شده از پنل دانش‌آموز برداشته نشد: ' + (e.message || e); }
     const sch: any[] = [];
     A.sexams().forEach((e: any) => {
       const mates = A.D.students.filter((x: any) => x.cls === e.cls), cavg: any = {};
@@ -225,7 +263,7 @@ export function mkServer(A: any) {
       }
     } catch (e: any) { S.schErr = 'نمره‌های مدرسه منتشر نشد: ' + (e.message || e) + ' — فایل supabase/update-2.sql را اجرا کنید.'; }
     await sb.from('calendar_pub').delete().lt('week_start', A.dateOf(w0, 0).toISOString().slice(0, 10));
-    S.last = { n: list.length, ex: ex.length, at: new Date().toLocaleTimeString('fa-IR') };
+    S.last = { n: list.length, ex: ex.length, del: removed, at: new Date().toLocaleTimeString('fa-IR') };
   }
   async function syncAnn() {
     const rows = A.annActive().map((a: any) => ({ id: a.id, type: a.type, title: a.title, body: a.body || '', cls: a.cls === 'all' ? null : a.cls, ev: a.ev || '', starts: a.starts || null, exp: a.exp, pin: !!a.pin }));
@@ -249,7 +287,7 @@ export function mkServer(A: any) {
     if (!cfgOk || !S.user || S.mgr !== true || !Object.keys(sd().accounts).length) return;
     S.auto = { st: 'wait' }; clearTimeout(apT); apT = setTimeout(apRun, 2500);
   }
-  async function publishAll() { Object.keys(lastSig).forEach((k) => delete lastSig[k]); S.busy = true; S.msg = 'در حال انتشار…'; draw(); try { await publish(); say('انتشار انجام شد.'); } catch (e: any) { say('خطا: ' + (e.message || e)); } }
+  async function publishAll() { Object.keys(lastSig).forEach((k) => delete lastSig[k]); synced.clear(); S.busy = true; S.msg = 'در حال انتشار…'; draw(); try { await publish(); say('انتشار انجام شد.'); } catch (e: any) { say('خطا: ' + (e.message || e)); } }
 
   /* ---- views ---- */
   const tabs = () => '';
@@ -278,7 +316,7 @@ export function mkServer(A: any) {
   // وضعیت همگام‌سازی خودکار با پنل دانش‌آموزان
   const pub = () => {
     const a = S.auto || {}, st = a.st === 'wait' ? '⏳ در حال همگام‌سازی…' : a.st === 'err' ? '⚠ همگام‌سازی ناموفق' : a.st === 'ok' ? `✅ همه‌چیز برای دانش‌آموزان به‌روز است (${a.at})` : '🔄 خودکار';
-    return `<div class="c np" style="margin-bottom:10px"><div class="tb" style="margin:0"><div style="flex:1;min-width:200px"><b>${st}</b><div class="m">معافیت‌ها، نتایج آزمون، اطلاعیه‌ها و نمرات بعد از هر تغییر خودکار برای دانش‌آموزان به‌روز می‌شود؛ نیازی به «انتشار» نیست.</div>${a.st === 'err' ? `<div class="dn">${esc(a.msg)}</div>` : ''}${S.schErr ? `<div class="dn">${esc(S.schErr)}</div>` : ''}${S.annErr ? `<div class="dn">${esc(S.annErr)}</div>` : ''}${S.planErr ? `<div class="dn">${esc(S.planErr)}</div>` : ''}</div><button class="btn" onclick="srvPub()" title="اگر شک دارید، همه‌چیز را دوباره بفرستید">🔄 ارسال مجدد همه</button></div></div>`;
+    return `<div class="c np" style="margin-bottom:10px"><div class="tb" style="margin:0"><div style="flex:1;min-width:200px"><b>${st}</b><div class="m">معافیت‌ها، نتایج آزمون، اطلاعیه‌ها و نمرات بعد از هر تغییر خودکار برای دانش‌آموزان به‌روز می‌شود؛ نیازی به «انتشار» نیست.</div>${a.st === 'err' ? `<div class="dn">${esc(a.msg)}</div>` : ''}${S.schErr ? `<div class="dn">${esc(S.schErr)}</div>` : ''}${S.annErr ? `<div class="dn">${esc(S.annErr)}</div>` : ''}${S.planErr ? `<div class="dn">${esc(S.planErr)}</div>` : ''}${S.exErr ? `<div class="dn">${esc(S.exErr)}</div>` : ''}</div><button class="btn" onclick="srvPub()" title="اگر شک دارید، همه‌چیز را دوباره بفرستید">🔄 ارسال مجدد همه</button></div></div>`;
   };
   function page() {
     if (!cfgOk && (window as any).__OFFLINE) return `<div class="c"><h3>📴 حالت آفلاین</h3><p>بخش سرور (ساخت حساب، دریافت کارنامه، انتشار برای دانش‌آموزان) به اینترنت نیاز دارد. وقتی اینترنت وصل شد، پایین صفحه «اتصال دوباره» را بزنید؛ تغییرهای آفلاین روی سرور ذخیره می‌شوند.</p></div>`;
