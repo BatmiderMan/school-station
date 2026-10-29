@@ -146,6 +146,16 @@ export function mkAttend(A: any) {
     const noRes = M.abs.filter((a: any) => M.needs(a)).length, k = (ic: string, b: any, t: string, col: string, hot?: boolean) => `<div class="dykp ${hot ? 'hot' : ''}" style="--kc:${col}"><span>${ic}</span><b>${n(b)}</b><small>${t}</small></div>`;
     return `<div class="dykps">${k('❌', M.absN, 'غایب', '#dc2626', M.absN > 0)}${k('⏰', M.lateN, 'متأخر', '#d97706')}${k('🔒', M.exemptCount, 'دارای معافیت', '#7c3aed')}${k('📞', noRes, 'نیازمند تماس', '#e11d48', noRes > 0)}${k('⚪', M.unmarked, 'زنگِ ثبت‌نشده', '#64748b')}</div>`;
   }
+  // تعداد غایب‌های روز به تفکیک گروه: همه، ریاضی، تجربی (و هر کلاس جدا)؛ یک دانش‌آموز اگر چند زنگ غایب باشد یک نفر حساب می‌شود
+  const isMath = (cl: string) => String(cl).startsWith('ریاضی');
+  function grpStrip(M: any) {
+    const R = AT.rows.filter((r: any) => r.day === M.day);
+    const stat = (cs: any[]) => { let ab = 0, late = 0, total = 0; cs.forEach((c: any) => c.ss.forEach((x: any) => { total++; if (!x.sid) return; const mine = R.filter((r: any) => r.student_id === x.sid); if (mine.some((r: any) => r.status === 'absent')) ab++; else if (mine.length) late++; })); return { ab, late, total }; };
+    const G = [['all', 'همه', '#4f46e5', M.classes], ['grp:m', 'ریاضی', '#0891b2', M.classes.filter((c: any) => isMath(c.cl))], ['grp:e', 'تجربی', '#16a34a', M.classes.filter((c: any) => !isMath(c.cl))]] as [string, string, string, any[]][];
+    const card = ([v, t, col, cs]: [string, string, string, any[]]) => { const s = stat(cs); return `<button class="dygc ${s.ab ? 'hot' : ''}" style="--kc:${col}" onclick="AT_gf('${v}')" title="نمایش غایب‌های ${t}"><small>${t}</small><b>${n(s.ab)}</b><span>غایب از ${n(s.total)} نفر${s.late ? ` · ⏰ ${n(s.late)} تأخیر` : ''}</span></button>`; };
+    const per = M.classes.map((c: any) => { const s = stat([c]); return `<button class="tag ${s.ab ? 'dn' : ''}" style="cursor:pointer;margin:2px" onclick="AT_gf('${c.cl}')">${esc(c.cl)}: <b>${n(s.ab)}</b> غایب${s.late ? ` · ${n(s.late)} تأخیر` : ''}</button>`; }).join('');
+    return `<div class="c dygrp"><div class="tb" style="margin:0 0 8px"><b>👥 غایبین ${M.day === todayIso() ? 'امروز' : 'این روز'} به تفکیک گروه</b><span class="m">برای دیدن اسامی روی هر گروه بزنید</span></div><div class="dygcs">${G.map(card).join('')}</div><div style="margin-top:8px">${per}</div></div>`;
+  }
   function absCard(a: any, day: string) {
     const s = a.s, ph = s.phone ? esc(s.phone) : '', prev = (AT.hist[a.sid]?.size || 1) - 1, need = !a.note && !a.called, k = `${a.sid}_${day}`;
     return `<div class="dyab ${need ? 'need' : 'ok'}"><div class="dyah"><div class="av">${esc(ini(s.name))}</div><div style="flex:1;min-width:0"><b style="font-size:16px">${esc(s.name)}</b><div class="m">${a.cl} · ${prev > 0 ? `قبلاً ${n(prev)} روز غایب بوده` : 'اولین غیبت'}</div></div><div class="dyps">${a.rows.map((r: any) => `<span class="dyp ${r.status}">${r.status === 'late' ? '⏰' : '❌'} ${n(r.period)}</span>`).join('')}</div></div>
@@ -157,8 +167,8 @@ export function mkAttend(A: any) {
   function absTab(M: any) {
     const f = AT.f || 'all', cf = AT.cf || 'all', needN = M.abs.filter((a: any) => M.needs(a)).length;
     const chip = (k: string, v: string, t: string, cur: string) => `<button class="${cur === v ? 'on' : ''}" onclick="AT_${k}('${v}')">${t}</button>`;
-    const list = M.abs.filter((a: any) => (f === 'all' || (f === 'need' ? M.needs(a) : !M.needs(a))) && (cf === 'all' || a.cl === cf));
-    const filt = `<div class="seg">${chip('f', 'all', `همه (${n(M.abs.length)})`, f)}${chip('f', 'need', `📞 نیازمند تماس (${n(needN)})`, f)}${chip('f', 'done', '✅ رسیدگی‌شده', f)}</div><div class="seg">${chip('cf', 'all', 'همه کلاس‌ها', cf)}${A.CL.map((c: string) => chip('cf', c, c, cf)).join('')}</div>`;
+    const list = M.abs.filter((a: any) => (f === 'all' || (f === 'need' ? M.needs(a) : !M.needs(a))) && (cf === 'all' || a.cl === cf || (cf === 'grp:m' && isMath(a.cl)) || (cf === 'grp:e' && !isMath(a.cl))));
+    const filt = `<div class="seg">${chip('f', 'all', `همه (${n(M.abs.length)})`, f)}${chip('f', 'need', `📞 نیازمند تماس (${n(needN)})`, f)}${chip('f', 'done', '✅ رسیدگی‌شده', f)}</div><div class="seg">${chip('cf', 'all', 'همه کلاس‌ها', cf)}${chip('cf', 'grp:m', 'ریاضی', cf)}${chip('cf', 'grp:e', 'تجربی', cf)}${A.CL.map((c: string) => chip('cf', c, c, cf)).join('')}</div>`;
     const empty = `<div class="c m" style="text-align:center;padding:26px">🎉 ${M.unmarked === M.total ? 'هنوز حضور و غیابی ثبت نشده است.' : M.abs.length ? 'موردی با این فیلتر نیست.' : 'تا این لحظه هیچ غیبتی ثبت نشده.'}</div>`;
     return `${M.abs.length ? filt : ''}${list.length ? list.map((a: any) => absCard(a, M.day)).join('') : empty}`;
   }
@@ -231,7 +241,7 @@ export function mkAttend(A: any) {
     const needN = M.abs.filter((a: any) => M.needs(a)).length, T = [['abs', `🚨 غایبین${M.abs.length ? ` <i class="bdg" style="display:inline-grid;margin:0 4px">${n(M.abs.length)}</i>` : ''}`], ['per', '🏫 زنگ‌ها'], ['ex', '🎓 معافیت‌ها']];
     const body: any = { abs: absTab, per: perTab, ex: exTab };
     const noAcc = D().students.filter((s: any) => !sidOf(s.id)).length;
-    return `${staleBar()}${hero(M)}${weekStrip(M)}${heat(M)}${kpis(M)}
+    return `${staleBar()}${hero(M)}${weekStrip(M)}${heat(M)}${kpis(M)}${grpStrip(M)}
     <div class="seg xtabs">${T.map(([k, t]) => `<button class="${tab === k ? 'on' : ''}" onclick="AT_tab('${k}')">${t}</button>`).join('')}</div>
     ${(body[tab] || absTab)(M)}
     ${noAcc ? `<p class="m" style="margin-top:10px">⚠ ${n(noAcc)} دانش‌آموز هنوز حساب پنل ندارند؛ غیبت‌شان را نماینده نمی‌تواند ثبت کند.</p>` : ''}
@@ -338,7 +348,7 @@ export function mkAttend(A: any) {
   }
   const h = {
     AT_go: go, AT_wk: wk, AT_ref: () => load(true), AT_today: () => { AT.w = null; initDay(); load(true); },
-    AT_tab: (t: string) => { AT.tab = t; draw(); }, AT_pc: (c: string) => { AT.pc = c; G.st.ap = 0; draw(); }, AT_pp: (_p: number) => { AT.tab = 'per'; draw(); }, AT_f: (v: string) => { AT.f = v; draw(); }, AT_cf: (v: string) => { AT.cf = v; draw(); },
+    AT_tab: (t: string) => { AT.tab = t; draw(); }, AT_pc: (c: string) => { AT.pc = c; G.st.ap = 0; draw(); }, AT_pp: (_p: number) => { AT.tab = 'per'; draw(); }, AT_f: (v: string) => { AT.f = v; draw(); }, AT_cf: (v: string) => { AT.cf = v; draw(); }, AT_gf: (v: string) => { AT.tab = 'abs'; AT.f = 'all'; AT.cf = v; draw(); },
     AT_cell: cellModal, AT_set: setCell, AT_all: allDay, AT_note: saveNote, AT_periodDraft: (v: string) => { noteDrafts[periodNoteKey(iso(AT.w, AT.d), curCl(), G.st.ap)] = v; }, AT_periodNote: savePeriodNote, AT_csv: csv,
     AT_prof: (lid: string) => { A.op(lid); U.stab = 'abs'; draw(); },
     AT_phone: (lid: string) => { const v = val('ph_' + lid).replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[^\d+]/g, ''); if (v.length < 8) { A.toast('شماره معتبر نیست'); return; } A.sf(lid, 'phone', v); A.toast('شماره ذخیره شد ✓'); },
