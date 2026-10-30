@@ -21,7 +21,13 @@ export interface ImportedExam {
 export const INSTITUTES = [{ id: 'maz', label: 'ماز', hint: 'کارنامه‌ی تحلیلی (PDF یا عکس)' }, { id: 'qalamchi', label: 'قلم‌چی', hint: 'کارنامه‌ی PDF از kanoon.ir' }];
 
 const SEEN_KEY = 'konkour_maz_heading_map_v1';
-const loadSeen = (): { name: string; sig: string }[] => { try { return JSON.parse(localStorage.getItem(SEEN_KEY) || '[]'); } catch (e) { return []; } };
+// عنوان‌هایی که برنامه قبلاً از اصلاح‌های دستی یاد گرفته؛ اگر یکی از آن‌ها دقیقاً شکلِ یک عنوانِ شناخته‌شده باشد ولی نام دیگری داشته باشد (مثلاً «زمین‌شناسی» که روزگاری «ادبیات» ثبت شد)، اشتباه حساب می‌شود و کنار گذاشته می‌شود.
+const loadSeen = (): { name: string; sig: string }[] => {
+  try {
+    const all: { name: string; sig: string }[] = JSON.parse(localStorage.getItem(SEEN_KEY) || '[]');
+    return all.filter((x) => { let best: { name: string; d: number } | null = null; for (const k of KNOWN_HEADINGS) { const d = sigDistance(x.sig, k.sig); if (!best || d < best.d) best = { name: k.name, d }; } return !(best && best.d < 0.15 && best.name !== x.name); });
+  } catch (e) { return []; }
+};
 export function rememberHeading(sig: string, name: string): void {
   const rest = loadSeen().filter((x) => sigDistance(x.sig, sig) > 0.05);
   try { localStorage.setItem(SEEN_KEY, JSON.stringify([...rest, { name, sig }].slice(-40))); } catch (e) { /* ignore */ }
@@ -54,6 +60,9 @@ export async function importMaz(file: File, cfg: ExamSettings, roster: string[] 
     const c = s.correct ?? 0, w = s.wrong ?? 0, b = s.blank ?? 0;
     return { index: s.index, sectionName: hit?.name || '', n: c + w + b, c, w, level: s.level, countryRank: s.countryRank, recognised: !!hit };
   });
+  // کارنامه‌ی ماز همیشه به یک ترتیب ثابت است؛ اگر شکل عنوان شناخته نشد، از روی جایگاه نام می‌گیرد: تجربی (۵ درس) = زیست، فیزیک، شیمی، ریاضی، زمین‌شناسی؛ ریاضی (۳ درس) = ریاضی، فیزیک، شیمی
+  const POS = rows.length === 5 ? ['زیست', 'فیزیک', 'شیمی', 'ریاضی', 'زمین شناسی'] : rows.length === 3 ? ['ریاضی', 'فیزیک', 'شیمی'] : null;
+  if (POS) rows.forEach((r) => { const nm = POS[r.index]; if (!r.sectionName && nm && !used.has(nm)) { r.sectionName = nm; used.add(nm); } });
   // unrecognised headings: take the user's configured sections in order that aren't used yet
   const free = cfg.sections.map((s) => s.name).filter((n) => !used.has(n));
   rows.forEach((r) => { if (!r.sectionName) r.sectionName = free.shift() || `درس ${r.index + 1}`; });
@@ -156,4 +165,4 @@ export async function importReport(file: File, cfg: ExamSettings, roster: string
   if (r.exam.detected) r.exam.detected.alt = nameFromFilename(file.name);
   return r;
 }
-
+export { canonSection, fixRowsNames, repairRes } from './repair';

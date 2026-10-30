@@ -2,6 +2,7 @@
 // داده‌ها همان D.exams قبلی هستند: { id, title, inst, date, res: { [studentId]: { level, rank, subj, raw, slv } } }
 
 import { buildSchoolXlsx } from './xlsx';
+import { repairRes } from './scan/repair';
 
 export function mkExams(A: any) {
   const esc = A.esc, n = A.n, n1 = A.n1;
@@ -117,6 +118,25 @@ export function mkExams(A: any) {
     <div class="tb" style="margin:10px 0 0"><label class="m">تراز <input id="xl_${e.id}" type="number" value="${r.level ?? ''}" style="width:90px"></label><label class="m">رتبه <input id="xr_${e.id}" type="number" value="${r.rank ?? ''}" style="width:110px"></label><button class="btn" onclick="X_upd('${s.id}','${e.id}')">ذخیره‌ی ویرایش</button><button class="btn" style="color:var(--bad)" onclick="X_delres('${s.id}','${e.id}')">حذف این نتیجه</button></div></details>`;
   }
   /* ---------- ۴) مدیریت آزمون‌ها ---------- */
+  /* ----- تعمیر نام درس‌های آزمون‌های قبلی (ادبیات ← زمین شناسی، «زیست‌شناسی» ← «زیست»، نام‌های خراب) ----- */
+  let FX: { items: { e: any; sid: string; ch: [string, string][] }[] } | null = null;
+  const fxCtx = (e: any, sid: string) => ({ inst: e.inst, exp: !String(D().students.find((s: any) => s.id === sid)?.cls || '').startsWith('ریاضی') });
+  function fxScan() { const items: any[] = []; exams().forEach((e: any) => Object.keys(e.res || {}).forEach((sid) => { const ch = repairRes(e.res[sid], fxCtx(e, sid), true); if (ch.length) items.push({ e, sid, ch }); })); FX = { items }; draw(); }
+  function fxApply() { if (!FX) return; FX.items.forEach(({ e, sid }) => repairRes(e.res[sid], fxCtx(e, sid))); const c = FX.items.length; FX = null; A.save(); A.toast(`نام درس‌ها در ${n(c)} نتیجه اصلاح شد`); draw(); }
+  function fixCard() {
+    let body = '<p class="m" style="margin:0 0 8px">اگر قبلاً کارنامه‌های تجربی را وارد کرده‌اید و نام بعضی درس‌ها اشتباه ثبت شده (مثلاً «زمین‌شناسی» به‌جای «ادبیات»، یا «زیست‌شناسی» جدا از «زیست»)، اینجا یک‌جا درست می‌شود. اول فقط بررسی می‌کند و چیزی را عوض نمی‌کند.</p>';
+    if (FX) {
+      if (!FX.items.length) body += '<p style="margin:0;color:var(--ok,#16a34a)">✅ موردی که نیاز به اصلاح باشد پیدا نشد.</p>';
+      else {
+        const by = new Map<string, { e: any; cnt: number; ren: Map<string, number> }>();
+        FX.items.forEach(({ e, ch }) => { const g = by.get(e.id) || { e, cnt: 0, ren: new Map() }; g.cnt++; ch.forEach(([a, b]) => g.ren.set(`«${a}» ← «${b}»`, (g.ren.get(`«${a}» ← «${b}»`) || 0) + 1)); by.set(e.id, g); });
+        body += `<div class="tw"><table><thead><tr><th>آزمون</th><th>نتیجه‌ی اصلاح‌شونده</th><th>تغییر</th></tr></thead><tbody>${[...by.values()].map((g) => `<tr style="cursor:default"><td>${chip(g.e.inst)} ${esc(g.e.title)} <span class="m">${esc(g.e.date)}</span></td><td>${n(g.cnt)}</td><td>${[...g.ren.keys()].map(esc).join('<br>')}</td></tr>`).join('')}</tbody></table></div>`;
+        body += `<div class="tb" style="margin-top:8px"><button class="btn p" onclick="X_fixApply()">✓ اعمال تغییرها (${n(FX.items.length)} نتیجه)</button><button class="btn" onclick="X_fixCancel()">انصراف</button></div>`;
+      }
+    }
+    if (!FX || !FX.items.length) body += `<div class="tb" style="margin-top:8px"><button class="btn p" onclick="X_fixScan()">🔍 بررسی نام درس‌ها</button></div>`;
+    return `<div class="c"><h3>🔧 تعمیر نام درس‌های آزمون‌های قبلی</h3>${body}</div>`;
+  }
   function manage() {
     const E = exams().reverse();
     const create = `<div class="c"><h3>ساخت آزمون جدید</h3><div class="tb"><input id="xn_t" placeholder="عنوان (مثلاً قلم‌چی ۸ آبان)" style="flex:1;min-width:200px"><select id="xn_i">${INST.map((i) => `<option>${i}</option>`).join('')}</select><input id="xn_d" value="${A.today()}" style="width:110px"><button class="btn p" onclick="X_new()">ایجاد</button></div><p class="m" style="margin:0">معمولاً لازم نیست؛ با وارد کردن کارنامه، آزمون خودکار ساخته می‌شود. اینجا برای وقتی است که نتایج را به‌صورت لیست یا دستی وارد می‌کنید.</p></div>`;
@@ -124,7 +144,7 @@ export function mkExams(A: any) {
       return `<div class="c" style="margin-top:8px"><div class="tb" style="margin:0"><span style="flex:1;min-width:180px">${chip(e.inst)} <b>${esc(e.title)}</b> <span class="m">${esc(e.date)} · ${n(c)} نفر</span></span><button class="btn" onclick="X_('ex','${e.id}');X_('tab','ex')">نتایج</button><button class="btn ${ed ? 'p' : ''}" onclick="X_('edit','${ed ? '' : e.id}')">${ed ? 'بستن' : 'ویرایش / چسباندن نتایج'}</button><button class="btn" style="color:var(--bad)" onclick="X_del('${e.id}')">حذف</button></div>
       ${ed ? `<div class="tb" style="margin-top:10px"><input id="xe_t" value="${esc(e.title)}" style="flex:1;min-width:180px"><select id="xe_i">${INST.map((i) => `<option ${i === e.inst ? 'selected' : ''}>${i}</option>`).join('')}</select><input id="xe_d" value="${esc(e.date)}" style="width:110px"><button class="btn p" onclick="X_save('${e.id}')">ذخیره</button></div>
       <p class="m" style="margin:6px 0">چسباندن نتایج؛ هر خط: <b>نام، تراز، رتبه</b> (رتبه اختیاری)</p><textarea id="xpr" placeholder="علی احمدی, 7250, 21000" style="width:100%;min-height:90px"></textarea><div class="tb" style="margin-top:6px"><button class="btn p" onclick="X_paste('${e.id}')">ثبت نتایج</button></div>` : ''}</div>`; }).join('') || '<p class="m">آزمونی نیست.</p>';
-    return create + `<h3 class="xh" style="margin-top:16px">همه‌ی آزمون‌ها (${n(E.length)})</h3>${list}`;
+    return fixCard() + create + `<h3 class="xh" style="margin-top:16px">همه‌ی آزمون‌ها (${n(E.length)})</h3>${list}`;
   }
 
   /* ---------- عملیات ---------- */
@@ -136,6 +156,7 @@ export function mkExams(A: any) {
     xgo: (tab: string) => { X.tab = tab; A.U.p = 'exm'; draw(); },
     X_find: (name: string) => { const t = norm(name), s = D().students.find((x: any) => norm(x.name) === t) || D().students.find((x: any) => norm(x.name).includes(t)); if (s) { X.sid = s.id; X.open = null; draw(); } },
     X_csv: csvExam,
+    X_fixScan: fxScan, X_fixApply: fxApply, X_fixCancel: () => { FX = null; draw(); },
     X_xlsx: () => { try { const bytes = buildSchoolXlsx(D(), A.CL); A.saveFile(`نتایج-آزمون-${new Date().toISOString().slice(0, 10)}.xlsx`, new Blob([bytes as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })); A.toast('فایل اکسل ساخته شد'); } catch (err: any) { alert('ساخت فایل اکسل ناموفق بود: ' + (err?.message || err)); } },
     X_quick: quickSave,
     X_new: () => { const t = val('xn_t').trim(); if (!t) { A.toast('عنوان را بنویسید'); return; } const id = 'e' + Date.now().toString(36); D().exams.push({ id, title: t, inst: val('xn_i'), date: val('xn_d').trim(), res: {} }); X.ex = id; X.edit = id; A.save(); draw(); },

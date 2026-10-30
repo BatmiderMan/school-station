@@ -3,7 +3,7 @@ import './style.css';
 import { ic, initUi, annHtml, daysLeft, toast } from './ui';
 import { sb, cfgOk, authErrText } from './supa';
 import { initPwa } from './pwa';
-import { importReport, ExamSettings } from './scan';
+import { importReport, ExamSettings, fixRowsNames } from './scan';
 import { mkAttGrid } from './attgrid';
 import { planView, nextExam, exTitle, exDateLabel, exLeft } from './plan';
 import { mazeView, nextStage, stageTitle, stageLeft, trackOf } from './maze';
@@ -327,6 +327,7 @@ async function submitIt() {
   if (x.level == null) { alert('تراز کل خوانده نشد؛ فایل واضح‌تری بدهید.'); return; }
   if (!title) { alert('عنوان آزمون را بنویسید.'); return; }
   T.busy = true; draw();
+  fixRowsNames(x.rows, { inst: x.institute, exp: !String(T.me?.cls || '').startsWith('ریاضی') });
   const agg: any = {}; x.rows.forEach((r: any) => { const a = agg[r.sectionName] || [0, 0, 0]; agg[r.sectionName] = [a[0] + r.c, a[1] + r.w, a[2] + r.n - r.c - r.w]; });
   const subj: any = {}; Object.entries(agg).forEach(([k, [c, w, b]]: any) => { const t = c + w + b; subj[k] = t ? Math.round((3 * c - w) / (3 * t) * 1000) / 10 : 0; });
   const { error } = await sb.from('submissions').insert({ student_id: T.me.id, inst: x.institute, title, date, level: x.level, rank: x.countryRank, subj, raw: x.rows.map((r: any) => ({ k: r.sectionName, c: r.c, w: r.w, b: r.n - r.c - r.w, lv: r.level })), file_b64: await toB64(T.prev.file), file_type: T.prev.file.type });

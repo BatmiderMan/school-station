@@ -9,7 +9,7 @@ import { mkCalls } from './calls';
 import { initPwa } from './pwa';
 import { snapList } from './store';
 import fontUrl from './assets/vazirmatn-arabic-wght-normal.woff2?url';
-import { importReport, rememberHeading, INSTITUTES, ImportedExam, ExamSettings } from './scan';
+import { importReport, rememberHeading, INSTITUTES, ImportedExam, ExamSettings, fixRowsNames } from './scan';
 import { matchStudents, confident } from './scan/nameMatch';
 export function start(){
 
@@ -247,6 +247,7 @@ function commit(f:FI):string|null{
  const x=f.x!;if(!f.sid)return 'دانش‌آموز انتخاب نشده';
  if(!/^\d{4}\/\d{2}\/\d{2}$/.test(x.date))return 'تاریخ را به شکل 1405/07/10 بنویسید';
  if(x.level==null)return 'تراز کل خوانده نشد؛ دستی وارد کنید';
+ fixRowsNames(x.rows,{inst:x.institute,exp:!String(D.students.find((s:any)=>s.id===f.sid)?.cls||'').startsWith('ریاضی')});
  let e=D.exams.find(q=>q.inst===x.institute&&q.date===x.date);
  if(!e){e={id:'e'+Date.now().toString(36)+f.id,title:x.title,inst:x.institute,date:x.date,res:{}};D.exams.push(e)}
  const subj={},raw={},slv={};
