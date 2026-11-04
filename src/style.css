@@ -440,3 +440,26 @@ details.c>summary::-webkit-details-marker{display:none}
 .pzg{border-collapse:separate;border-spacing:3px;font-size:11.5px;width:100%;table-layout:fixed}.pzg th{color:var(--mut);font-weight:600;white-space:nowrap;padding:2px 1px;font-size:11px}.pzg th:first-child{width:62px}
 .pzg button{width:100%;min-width:0;padding:8px 2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-radius:10px;border:1px solid var(--bd);background:var(--card2);color:inherit;font:inherit;line-height:1.3;cursor:pointer}
 .pzg button.on{background:#ec489920;border-color:#ec4899;color:#ec4899;font-weight:700}
+/* ===== نمای جامع آزمون‌ها ===== */
+.mx-k{margin-bottom:10px}.mx-k .k small{font-size:13px;font-weight:600;color:var(--mut)}.mx-k .k b{font-size:22px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mx-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 8px}.mx-bar .btn.on{background:var(--acs);border-color:var(--ac);color:var(--ac)}
+.mx-fc{border:1px solid var(--bd);background:var(--card);color:var(--mut);border-radius:999px;padding:5px 12px;font:inherit;font-size:12.5px;cursor:pointer}.mx-fc b{color:var(--tx);margin-inline-start:3px}.mx-fc.on{background:var(--acs);border-color:var(--ac);color:var(--ac)}
+.mx-leg{display:flex;gap:10px;align-items:center;flex-wrap:wrap;color:var(--mut);font-size:12px;margin:2px 0 8px}.mx-lg{display:inline-block;width:120px;height:10px;border-radius:6px;background:linear-gradient(90deg,hsl(0 62% 42% / .55),hsl(60 62% 42% / .55),hsl(125 62% 42% / .55))}
+.mxw{padding:0;overflow:auto;max-height:calc(100vh - 330px);min-height:320px;position:relative}
+table.mx{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%;font-size:12px}
+table.mx th,table.mx td{padding:4px 7px;text-align:center;white-space:nowrap;border-bottom:1px solid var(--bd);background:var(--card)}
+table.mx td{height:34px;cursor:default}table.mx td[data-s]{cursor:pointer;min-width:58px;border-inline-start:1px solid #7773}table.mx td b{font-weight:700;font-size:12.5px}
+table.mx thead th{position:sticky;z-index:3}table.mx tr.r1 th{top:0;height:50px;background:var(--card2)}table.mx tr.r2 th{top:50px;height:30px;background:var(--card)}table.mx tr.r3 th{top:80px;height:28px;background:var(--card)}
+table.mx .mx-c0{position:sticky;right:0;z-index:2;min-width:34px;width:34px}table.mx .mx-c1{position:sticky;right:34px;z-index:2;min-width:150px;max-width:150px;overflow:hidden;text-overflow:ellipsis;text-align:right;font-weight:700}table.mx .mx-c2{position:sticky;right:184px;z-index:2;min-width:84px;box-shadow:-6px 0 8px -6px #0005}
+table.mx thead .mx-c0,table.mx thead .mx-c1,table.mx thead .mx-c2{z-index:5}table.mx .mx-c1 a{color:inherit;text-decoration:none}table.mx .mx-c1 a:hover{color:var(--ac);text-decoration:underline}
+table.mx tbody tr:hover td:not([data-s]){background:var(--acs)}table.mx tbody tr:hover td[data-s]{filter:brightness(1.18)}
+.mx-e{cursor:pointer;line-height:1.25;min-width:60px;position:relative}.mx-e i{position:absolute;inset-inline:0;top:0;height:3px;background:var(--ic)}.mx-e b{display:block;font-size:12.5px}.mx-e small{display:block;color:var(--mut);font-size:10px;max-width:70px;overflow:hidden;text-overflow:ellipsis;margin:auto}.mx-e:hover{background:var(--acs)!important}
+.mx-sh{cursor:pointer;color:var(--mut);font-weight:700}.mx-sh.on{color:var(--ac)}.mx-sh:hover{color:var(--tx)}
+.mx-st{font-size:11.5px}.mx-st small{color:var(--mut);font-weight:400}.mx-lb{text-align:right!important;color:var(--mut);font-weight:700}
+.mx-s{min-width:64px;line-height:1.3}.mx-s div{white-space:nowrap}.mx-fl{min-width:70px;letter-spacing:2px}
+.mx-d{font-style:normal;font-size:10px;margin-inline-start:3px;font-weight:700}.mx-d.up{color:var(--ok)}.mx-d.dn{color:var(--bad)}table.mx td[data-s] .mx-d{display:block;margin:0;font-weight:600;opacity:.95}
+.mx-ab{color:#7778;background:repeating-linear-gradient(135deg,transparent 0 5px,#7771 5px 6px)!important}.mx-na{color:var(--mut)}
+.mx-bad{color:var(--bad);font-weight:800}.mx-good{color:var(--ok)}
+tr.mx-g th,tr.mx-g td{background:var(--card2);font-weight:800;height:32px;border-top:2px solid var(--bd)}tr.mx-g .mx-gh{text-align:right;position:sticky;right:0;z-index:2}tr.mx-g .mx-gc small{display:block;font-size:9.5px;font-weight:400;color:var(--mut)}tr.mx-g .mx-gs{color:var(--mut)}
+tr[hidden]{display:none}
+.mx-tip{position:fixed;z-index:9999;max-width:300px}

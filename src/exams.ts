@@ -3,6 +3,7 @@
 
 import { buildSchoolXlsx } from './xlsx';
 import { repairRes } from './scan/repair';
+import { mkMaster } from './master';
 
 export function mkExams(A: any) {
   const esc = A.esc, n = A.n, n1 = A.n1;
@@ -27,15 +28,18 @@ export function mkExams(A: any) {
   let lastRef = 0;
   const refresh = (force: boolean) => { if (!force && Date.now() - lastRef < 30000) return; lastRef = Date.now(); const b = pend(); A.SV.refreshPend().then(() => { if (pend() !== b && A.U.p === 'exm') (A.bg || A.draw)(); }); };
 
-  const defaultTab = () => (pend() || A.FILES().some((f: any) => f.st === 'ok' && !f.done) ? 'in' : 'ex');
+  const defaultTab = () => (pend() || A.FILES().some((f: any) => f.st === 'ok' && !f.done) ? 'in' : 'ms');
   const seg = (k: string, o: string[][], cur: string) => `<div class="seg">${o.map(([v, t]) => `<button class="${cur === v ? 'on' : ''}" onclick="X_('${k}','${v}')">${t}</button>`).join('')}</div>`;
+
+  // نمای جامع (همه‌ی دانش‌آموزان × همه‌ی آزمون‌ها)
+  const M = mkMaster({ A, X, INST, IC, exams, stuList, delta, prevOf, chip, norm });
 
   /* ---------- قاب اصلی ---------- */
   function page() {
     if (!X.tab) X.tab = defaultTab();
     refresh(false);
-    const p = pend(), T = [['in', '📥 دریافت کارنامه' + (p ? ` <i class="bdg" style="display:inline-grid;margin:0 4px">${n(p)}</i>` : '')], ['ex', '📋 نتایج هر آزمون'], ['st', '👤 نتایج هر دانش‌آموز'], ['pl', '📅 برنامه‌ی آزمون‌ها'], ['mg', '🗂 مدیریت آزمون‌ها'], ['sch', '🏫 مدرسه']];
-    const body: any = { in: receive, ex: byExam, st: byStu, pl: () => A.plan(), mg: manage, sch: () => A.schp() };
+    const p = pend(), T = [['in', '📥 دریافت کارنامه' + (p ? ` <i class="bdg" style="display:inline-grid;margin:0 4px">${n(p)}</i>` : '')], ['ms', '🎛 نمای جامع'], ['ex', '📋 نتایج هر آزمون'], ['st', '👤 نتایج هر دانش‌آموز'], ['pl', '📅 برنامه‌ی آزمون‌ها'], ['mg', '🗂 مدیریت آزمون‌ها'], ['sch', '🏫 مدرسه']];
+    const body: any = { in: receive, ms: () => M.page(), ex: byExam, st: byStu, pl: () => A.plan(), mg: manage, sch: () => A.schp() };
     return `<div class="tb" style="margin:0 0 8px"><span style="flex:1"></span><button class="btn" onclick="X_xlsx()" title="همه‌ی نتایج ثبت‌شده در برنامه، در قالب اکسل مدرسه (ریاضی/تجربی × قلم‌چی/ماز)">📊 خروجی اکسل (قالب مدرسه)</button></div><div class="seg xtabs">${T.map(([k, t]) => `<button class="${X.tab === k ? 'on' : ''}" onclick="X_('tab','${k}')">${t}</button>`).join('')}</div>${(body[X.tab] || byExam)()}`;
   }
 
@@ -156,6 +160,12 @@ export function mkExams(A: any) {
     xgo: (tab: string) => { X.tab = tab; A.U.p = 'exm'; draw(); },
     X_find: (name: string) => { const t = norm(name), s = D().students.find((x: any) => norm(x.name) === t) || D().students.find((x: any) => norm(x.name).includes(t)); if (s) { X.sid = s.id; X.open = null; draw(); } },
     X_csv: csvExam,
+    X_m: (k: string, v: string) => { X[k] = k === 'msd' ? +v : v; draw(); },
+    X_ms: (k: string, set?: number) => { if (set) { X.msk = k; X.msd = 1; } else if (X.msk === k) X.msd = -(X.msd || 1); else { X.msk = k; X.msd = 1; } draw(); },
+    X_mq: (v: string) => M.filterDom(v),
+    X_gs: (sid: string) => goStu(sid),
+    X_ge: (eid: string) => { const e = D().exams.find((x: any) => x.id === eid); if (!e) return; X.ex = eid; X.inst = e.inst; X.tab = 'ex'; draw(); },
+    X_mcsv: () => M.csv(),
     X_fixScan: fxScan, X_fixApply: fxApply, X_fixCancel: () => { FX = null; draw(); },
     X_xlsx: () => { try { const bytes = buildSchoolXlsx(D(), A.CL); A.saveFile(`نتایج-آزمون-${new Date().toISOString().slice(0, 10)}.xlsx`, new Blob([bytes as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })); A.toast('فایل اکسل ساخته شد'); } catch (err: any) { alert('ساخت فایل اکسل ناموفق بود: ' + (err?.message || err)); } },
     X_quick: quickSave,
