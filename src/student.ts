@@ -5,6 +5,7 @@ import { sb, cfgOk, authErrText } from './supa';
 import { initPwa } from './pwa';
 import { importReport, ExamSettings, fixRowsNames } from './scan';
 import { mkAttGrid } from './attgrid';
+import { lineChart, chg } from './chart';
 import { planView, nextExam, exTitle, exDateLabel, exLeft } from './plan';
 import { mazeView, nextStage, stageTitle, stageLeft, trackOf } from './maze';
 
@@ -274,14 +275,14 @@ function rcal() {
   <div class="c tw"><table><thead>${head}</thead><tbody>${body}</tbody></table></div>
   <p class="m" style="margin-top:10px"><span class="tag xg">گروه</span> <span class="tag xf">معلم</span> <span class="tag xp">پیشرفت</span></p>`;
 }
-function chart(v: number[]) {
-  if (v.length < 2) return '';
-  const W_ = 600, H = 200, pl = 42, pr = 14, pt = 12, pb = 24, lo = Math.floor(Math.min(...v) / 500) * 500, hi = Math.ceil(Math.max(...v) / 500) * 500 || lo + 500;
-  const X = (i: number) => W_ - pr - (W_ - pl - pr) * i / (v.length - 1), Y = (x: number) => pt + (H - pt - pb) * (1 - (x - lo) / (hi - lo || 1));
-  let o = `<svg viewBox="0 0 ${W_} ${H}" width="100%">`;
-  for (let k = 0; k <= 3; k++) { const x = lo + (hi - lo) * k / 3, y = Y(x); o += `<line x1="${pl}" x2="${W_ - pr}" y1="${y}" y2="${y}" stroke="var(--bd)"/><text x="${pl - 4}" y="${y + 4}" text-anchor="end">${n(x)}</text>`; }
-  o += `<path d="${v.map((x, i) => (i ? 'L' : 'M') + X(i) + ' ' + Y(x)).join(' ')}" fill="none" stroke="var(--ac)" stroke-width="2.6"/>` + v.map((x, i) => `<circle cx="${X(i)}" cy="${Y(x)}" r="3.5" fill="var(--ac)"><title>${n(x)}</title></circle>`).join('');
-  return o + '</svg>';
+// نمودار روند تراز: قدیمی‌ترین آزمون چپ، تازه‌ترین راست (خطِ رو به بالا = بهتر شدن)؛ با رفتن روی هر نقطه جزئیات آزمون دیده می‌شود
+function chart(all: any[]) {
+  if (all.length < 2) return '';
+  const subjLine = (e: any) => Object.entries(e.subj || {}).map(([k, v]: any) => `${esc(k)} ${n(v)}٪`).join(' · ');
+  return lineChart(all.map((e: any) => String(e.date).slice(5)), [{ name: 'تراز', c: 'var(--ac)', v: all.map((e: any) => e.level), area: true, lab: all.length <= 8 ? 'all' : 'ends' }], {
+    step: 500, h: 200, fmt: (x: number) => n(x),
+    extra: (i: number) => { const e = all[i], p = i ? all[i - 1] : null; return `${esc(e.title)} · ${esc(e.date)}<br>رتبه‌ی کشوری: <b>${n(e.rank)}</b>${p ? `<br>تراز نسبت به قبل: ${chg(e.level - p.level, 'up', n)}${e.rank != null && p.rank != null ? `<br>رتبه نسبت به قبل: ${chg(e.rank - p.rank, 'down', n)}` : ''}` : ''}${subjLine(e) ? `<br>${subjLine(e)}` : ''}`; }
+  });
 }
 function exm() {
   const tabs = `<div class="seg">${['ماز', 'قلم‌چی', 'مدرسه'].map((k) => `<button class="${T.xi === k ? 'on' : ''}" onclick="T.xi='${k}';draw()">${k === 'مدرسه' ? 'آزمون‌های مدرسه' : 'تراز ' + k}</button>`).join('')}</div>`;
@@ -289,7 +290,7 @@ function exm() {
     <div class="tw"><table><thead><tr><th>درس</th><th>نمره</th><th>میانگین کلاس</th></tr></thead><tbody>${e.data.lessons.map((l: any) => `<tr style="cursor:default"><td>${esc(l.n)}</td><td><b>${l.s == null ? '—' : (Math.round(l.s * 100) / 100).toLocaleString('fa-IR')}</b>${l.max !== 20 ? ` <span class="m">از ${n(l.max)}</span>` : ''}</td><td class="m">${l.c == null ? '—' : (Math.round(l.c * 10) / 10).toLocaleString('fa-IR')}</td></tr>`).join('')}</tbody></table></div></div>`).join('') || `<div class="c m">هنوز نمره‌ای ثبت نشده.</div>`);
   const all = T.exams.filter((e: any) => e.inst === T.xi), ex = [...all].reverse();
   if (!ex.length) return tabs + `<div class="c m">هنوز نتیجه‌ی ${T.xi} ثبت نشده. از بخش «ارسال کارنامه» بفرستید.</div>`;
-  return tabs + `<div class="c"><h3>روند تراز ${T.xi}</h3>${chart(all.map((e: any) => e.level)) || '<p class="m">بعد از دو آزمون نمودار ساخته می‌شود.</p>'}</div>
+  return tabs + `<div class="c"><h3>روند تراز ${T.xi}</h3>${chart(all) || '<p class="m">بعد از دو آزمون نمودار ساخته می‌شود.</p>'}</div>
   <div class="c" style="margin-top:10px">${ex.map((e: any) => `<details style="padding:6px 0;border-bottom:1px solid var(--bd)"><summary style="cursor:pointer;display:flex;justify-content:space-between;gap:8px"><span>${esc(e.title)}<br><span class="m">${esc(e.date)}</span></span><span>تراز <b>${n(e.level)}</b> · رتبه ${n(e.rank)}</span></summary>
   ${Object.entries(e.subj || {}).map(([k, v]: any) => `<div style="margin:6px 0"><div style="display:flex;justify-content:space-between"><span>${esc(k)}</span><b>${n(v)}٪</b></div><div class="bar"><i style="width:${Math.max(2, Math.min(100, v))}%"></i></div></div>`).join('') || '<p class="m">درصد دروس ثبت نشده.</p>'}</details>`).join('')}</div>`;
 }

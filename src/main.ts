@@ -9,6 +9,7 @@ import { mkCalls } from './calls';
 import { initPwa } from './pwa';
 import { snapList } from './store';
 import fontUrl from './assets/vazirmatn-arabic-wght-normal.woff2?url';
+import { lineChart, chg } from './chart';
 import { importReport, rememberHeading, INSTITUTES, ImportedExam, ExamSettings, fixRowsNames } from './scan';
 import { matchStudents, confident } from './scan/nameMatch';
 export function start(){
@@ -56,14 +57,7 @@ const sexams=()=>[...ensureSch().exams].sort((a:any,b:any)=>a.date<b.date?-1:1);
 const ofc=c=>D.students.filter(s=>c==='all'||s.cls===c);
 function snap(ins:string=U.ins){const E=insE(ins);return D.students.map(s=>{const{l,p}=lp(s.id,ins);return{...s,l,d:p==null||l==null?null:l-p,rk:(E[E.length-1]?.res[s.id]||{}).rank}})}
 /* ---------- charts (oldest at right for RTL) ---------- */
-function line(labels,series){const W=600,H=230,pl=40,pr=12,pt=14,pb=34,all=series.flatMap(s=>s.v).filter(x=>x!=null);if(!all.length)return'<p class="m">داده‌ای نیست</p>';
- const lo=Math.floor(Math.min(...all)/500)*500,hi=Math.ceil(Math.max(...all)/500)*500||lo+500,N=Math.max(labels.length-1,1);
- const X=i=>W-pr-(W-pl-pr)*i/N,Y=v=>pt+(H-pt-pb)*(1-(v-lo)/(hi-lo||1));
- let o=`<svg viewBox="0 0 ${W} ${H}" width="100%">`;
- for(let k=0;k<=4;k++){const v=lo+(hi-lo)*k/4,y=Y(v);o+=`<line x1="${pl}" x2="${W-pr}" y1="${y}" y2="${y}" stroke="var(--bd)"/><text x="${pl-4}" y="${y+4}" text-anchor="end">${n(v)}</text>`}
- labels.forEach((l,i)=>o+=`<text x="${X(i)}" y="${H-12}" text-anchor="middle">${esc(l)}</text>`);
- series.forEach(s=>{let d='',st=0;s.v.forEach((v,i)=>{if(v==null){st=0;return}d+=(st?'L':'M')+X(i)+' '+Y(v)+' ';st=1});o+=`<path d="${d}" fill="none" stroke="${s.c}" stroke-width="2.4"/>`;s.v.forEach((v,i)=>{if(v!=null)o+=`<circle cx="${X(i)}" cy="${Y(v)}" r="3.2" fill="${s.c}"><title>${esc(s.name)}: ${n(v)}</title></circle>`})});
- o+='</svg>';if(series.length>1)o+='<div class="m">'+series.map(s=>`<span style="color:${s.c}">●</span> ${esc(s.name)}`).join(' &nbsp; ')+'</div>';return o}
+function line(labels:string[],series:any[],extra?:(i:number)=>string){return lineChart(labels,series,{step:500,h:230,fmt:(x:number)=>n(Math.round(x)),extra})}
 function bars(items,fmt=n){if(!items.length)return'<p class="m">داده‌ای نیست</p>';const mx=Math.max(...items.map(i=>Math.abs(i.v)),1);return items.map(i=>`<div style="margin:6px 0"><div style="display:flex;justify-content:space-between"><span>${esc(i.l)}</span><b>${fmt(i.v)}</b></div><div class="bar"><i style="width:${Math.max(2,Math.abs(i.v)/mx*100)}%;background:${i.c||'var(--ac)'}"></i></div></div>`).join('')}
 /* ---------- state & nav ---------- */
 const U:any={p:'home',ins:'ماز',sx:null,es:'g',rc:CL[0],rs:'num',rx:null,as:'o',xs:'cal',xc:CL[0],w:null,sv:'',gm:'a',cls:'all',q:'',ex:null,ct:'trend',sort:'num'};
@@ -92,7 +86,7 @@ function dash(){const E=insE(),le=E[E.length-1],pe=E[E.length-2],S=snap();
  <div class="c k"><b>${n(miss.length)}</b><span>بدون نتیجه در آخرین آزمون</span></div></div>
  <div class="c" style="margin-top:10px"><h3>کلاس‌ها ${le?`<span class="m">— ${esc(le.title)}، ${le.date}</span>`:''}</h3><div class="g">${CL.map((c,i)=>{const ss=ofc(c);return `<div class="c" style="border-top:3px solid ${CC[i]}"><b>${c}</b> <span class="m">${n(ss.length)} نفر</span><div class="m">میانگین تراز: <b style="color:var(--tx)">${n(avg(ss.map(s=>lv(s.id,le))))}</b></div></div>`}).join('')}</div></div>
  <div class="g2" style="margin-top:10px">
- <div class="c"><h3>روند میانگین تراز کلاس‌ها</h3>${line(E.map(e=>e.date.slice(5)),CL.map((c,i)=>({name:c,c:CC[i],v:E.map(e=>avg(ofc(c).map(s=>lv(s.id,e))))})))}</div>
+ <div class="c"><h3>روند میانگین تراز کلاس‌ها</h3>${line(E.map(e=>e.date.slice(5)),CL.map((c,i)=>({name:c,c:CC[i],v:E.map(e=>avg(ofc(c).map(s=>lv(s.id,e))))})),i=>esc(E[i].inst+' · '+E[i].title))}</div>
  <div class="c"><h3>⚠️ نیازمند توجه</h3>${att.slice(0,7).map(s=>row(s,s.r.map(t=>`<span class="tag r">${t}</span>`).join(''))).join('')||'<p class="m">موردی نیست 🎉</p>'}</div>
  <div class="c"><h3>🏆 برترین‌ها (آخرین تراز)</h3>${[...S].filter(s=>s.l!=null).sort((a,b)=>b.l-a.l).slice(0,5).map((s,i)=>row(s,`${n(i+1)}. <b>${n(s.l)}</b>`)).join('')}</div>
  <div class="c"><h3>📈 بیشترین پیشرفت</h3>${[...S].filter(s=>s.d!=null).sort((a,b)=>b.d-a.d).slice(0,5).map(s=>row(s,dl(s.d))).join('')}</div>
@@ -100,7 +94,7 @@ function dash(){const E=insE(),le=E[E.length-1],pe=E[E.length-2],S=snap();
  <div class="c" style="margin-top:10px"><h3>میان‌برها</h3><div class="tb"><button class="btn p" onclick="xgo('mg')">ثبت آزمون جدید</button><button class="btn" onclick="xgo('in')">اسکن کارنامه</button><button class="btn" onclick="go('stu')">افزودن دانش‌آموز</button><button class="btn" onclick="xgo('ex')">نتایج آزمون‌ها</button><button class="btn" onclick="go('exp')">گرفتن خروجی</button></div>
  </div>`}
 /* ---------- students ---------- */
-const spark=(v:any[])=>{const a=v.filter(x=>x!=null);if(a.length<2)return '<span class="m">—</span>';const lo=Math.min(...a),hi=Math.max(...a),W=64,H=20,X=(i:number)=>W-2-(W-4)*i/(a.length-1),Y=(x:number)=>H-2-(H-4)*(x-lo)/((hi-lo)||1);return `<svg width="${W}" height="${H}"><polyline fill="none" stroke="${a[a.length-1]>=a[0]?'var(--ok)':'var(--bad)'}" stroke-width="2" points="${a.map((x,i)=>X(i)+','+Y(x)).join(' ')}"/></svg>`};
+const spark=(v:any[])=>{const a=v.filter(x=>x!=null);if(a.length<2)return '<span class="m">—</span>';const lo=Math.min(...a),hi=Math.max(...a),W=64,H=20,X=(i:number)=>2+(W-4)*i/(a.length-1),Y=(x:number)=>H-2-(H-4)*(x-lo)/((hi-lo)||1),col=a[a.length-1]>=a[0]?'var(--ok)':'var(--bad)';return `<svg width="${W}" height="${H}" style="overflow:visible"><title>${esc(a.map(x=>n(x)).join(' ← '))}  (قدیمی‌ترین ← تازه‌ترین)</title><polyline fill="none" stroke="${col}" stroke-width="2" points="${a.map((x,i)=>X(i)+','+Y(x)).join(' ')}"/><circle cx="${X(a.length-1)}" cy="${Y(a[a.length-1])}" r="2.4" fill="${col}"/></svg>`};
 function stuRows(){const k=U.sort,q=U.q.trim();return snap().filter(s=>(U.cls==='all'||s.cls===U.cls)&&(!q||s.name.includes(q)||String(s.num)===q)).sort((a,b)=>k==='n'?a.name.localeCompare(b.name,'fa'):k==='l'?(b.l||0)-(a.l||0):k==='d'?(b.d??-1e9)-(a.d??-1e9):(a.cls===b.cls?(a.num||1e9)-(b.num||1e9):classOrder(a.cls)-classOrder(b.cls)))}
 function stu(){const S=stuRows(),wl=S.filter(s=>s.l!=null),dr=S.filter(s=>s.d!=null&&s.d<=-400).length,best=[...S].filter(s=>s.d!=null).sort((a,b)=>b.d-a.d)[0];
  return chips()+insSeg()+`<div class="g" style="margin-bottom:10px"><div class="c k"><b>${n(S.length)}</b><span>دانش‌آموز</span></div><div class="c k"><b>${n(avg(wl.map(s=>s.l)))}</b><span>میانگین تراز ${U.ins}</span></div><div class="c k"><b>${n(wl.length)}</b><span>دارای نتیجه ${U.ins}</span></div><div class="c k"><b class="${dr?'dn':''}">${n(dr)}</b><span>افت ۴۰۰+ تراز</span></div>${best&&best.d>0?`<div class="c k" onclick="op('${best.id}')" style="cursor:pointer"><b style="font-size:16px">${esc(best.name)}</b><span>بیشترین پیشرفت ${dl(best.d)}</span></div>`:''}</div>
@@ -145,7 +139,7 @@ function spage(){const s=D.students.find(x=>x.id===U.sid);if(!s){U.p='stu';retur
   for(let p=0;p<E.per;p++){gr+=`<div class="cp">${n(p+1)}</div>`;for(let d=0;d<4;d++){const st=status(id,cl,w,d,p);if(st)cnt++;gr+=`<div class="cell ${st?'x'+st:''}" style="--gc:${GC[GL.indexOf(letterC(cl,d,w))]}"><b>${esc(subj(cl,d,p))}</b><em>${st?({g:'معافیت گروه',f:'معافیت معلم',p:'معافیت پیشرفت'} as any)[st]:'حضور'}</em></div>`}}
   const hist=Object.keys(E.pw).filter(k=>E.pw[k][id]).sort((a,b)=>+b-+a);
   body=`<div class="c"><div class="tb"><b>گروه:</b><select onchange="setG('${id}',this.value)">${['','A','B','C','D'].map(L=>`<option value="${L}" ${(g||'')===L?'selected':''}>${L||'بدون گروه'}</option>`).join('')}</select></div></div>${wnav()}<p class="m">${n(cnt)} ساعت معافیت در این هفته</p>${gr}
-  <div class="g2" style="margin-top:10px"><div class="c"><h3>معافیت پیشرفت این هفته</h3>${pw?`${pw.map((k:string)=>{const[d,p]=k.split('-');return `<span class="tag">${DAYN[+d]} ساعت ${n(+p+1)} ${esc(subj(cl,+d,+p))}</span>`}).join('')}<div style="margin-top:8px"><button class="btn" onclick="revoke('${id}')">لغو</button></div>`:`<button class="btn p" onclick="grant('${id}')">اعطا</button>`}<h3 style="margin-top:14px">درس‌های دلخواه برای معافیت</h3><div class="chips">${subs.map(k=>`<button class="${(E.skip[id]||[]).includes(k)?'on':''}" onclick="tgSkip('${id}','${esc(k)}')">${esc(k)}</button>`).join('')}</div></div>
+  <div class="g2" style="margin-top:10px"><div class="c"><h3>معافیت پیشرفت این هفته</h3>${pw?`${pw.map((k:string)=>{const[d,p]=k.split('-');return `<span class="tag">${DAYN[+d]} زنگ ${n(+p+1)}${subj(cl,+d,+p)==='—'?'':' · '+esc(subj(cl,+d,+p))}</span>`}).join('')}<div style="margin-top:8px"><button class="btn" onclick="revoke('${id}')">لغو</button></div>`:`<button class="btn p" onclick="grant('${id}')">اعطا</button>`}<h3 style="margin-top:14px">درس‌های دلخواه برای معافیت</h3><div class="chips">${subs.map(k=>`<button class="${(E.skip[id]||[]).includes(k)?'on':''}" onclick="tgSkip('${id}','${esc(k)}')">${esc(k)}</button>`).join('')}</div></div>
   <div class="c"><h3>سابقه‌ی معافیت پیشرفت</h3>${hist.map(k=>`<div class="row" style="cursor:default"><span>هفته‌ی ${jd(dateOf(+k,0))}</span><span class="m">${E.pw[k][id].map((q:string)=>{const[d,p]=q.split('-');return DAYN[+d]+' '+subj(cl,+d,+p)}).join('، ')}</span></div>`).join('')||'<p class="m">تا حالا نداشته</p>'}</div></div>`}
  else if(tab==='abs'){body=AT2.stuTab(s)}
  else{
@@ -175,7 +169,7 @@ function delE(id){if(!confirm('آزمون حذف شود؟'))return;D.exams=D.exa
 /* ---------- charts ---------- */
 const CT=[['trend','روند کلاس‌ها'],['cmp','مقایسه کلاس‌ها در یک آزمون'],['subj','میانگین دروس'],['dist','توزیع تراز'],['sav','🏫 میانگین دروس یک آزمون مدرسه'],['sstu','🏫 نمره‌ی دانش‌آموزان در یک درس'],['sdist','🏫 توزیع نمره‌ها در یک درس']];
 function cht(){const E=insE(),ex=E.find(e=>e.id===U.ex)||E[E.length-1];U.ex=ex?.id;let h='';const se:any=ensureSch().exams.find(e=>e.id===U.sx)||sexams().slice(-1)[0];
- if(U.ct==='trend')h=line(E.map(e=>e.date.slice(5)),(U.cls==='all'?CL:[U.cls]).map((c,i)=>({name:c,c:CC[CL.indexOf(c)],v:E.map(e=>avg(ofc(c).map(s=>lv(s.id,e))))})));
+ if(U.ct==='trend')h=line(E.map(e=>e.date.slice(5)),(U.cls==='all'?CL:[U.cls]).map((c,i)=>({name:c,c:CC[CL.indexOf(c)],v:E.map(e=>avg(ofc(c).map(s=>lv(s.id,e))))})),i=>esc(E[i].inst+' · '+E[i].title));
  else if(U.ct==='cmp')h=bars(CL.map((c,i)=>({l:c,v:avg(ofc(c).map(s=>lv(s.id,ex)))||0,c:CC[i]})));
  else if(U.ct==='subj'){const m={};ofc(U.cls).forEach(s=>Object.entries(ex?.res[s.id]?.subj||{}).forEach(([k,v])=>(m[k]=m[k]||[]).push(v)));h=bars(Object.entries(m).map(([l,a])=>({l,v:avg(a)})),v=>n(v)+'٪')}
  else if(U.ct==='dist'){const b={};ofc(U.cls).forEach(s=>{const v=lv(s.id,ex);if(v!=null){const k=Math.floor(v/1000)*1000;b[k]=(b[k]||0)+1}});h=bars(Object.keys(b).sort().map(k=>({l:`${n(+k)} تا ${n(+k+999)}`,v:b[k]})),v=>n(v)+' نفر')}
@@ -262,9 +256,9 @@ function commitAll(){const bad:string[]=[];FILES.filter(f=>f.st==='ok'&&!f.done)
 const DAYN=['شنبه','یکشنبه','سه‌شنبه','چهارشنبه'],DOFF=[0,1,3,4],GL=['A','B','C','D'],GC=['#6366f1','#10b981','#f59e0b','#ec4899'],DAY=86400000;
 const mid=(d:Date)=>{const x=new Date(d);x.setHours(12,0,0,0);return x};
 function ensureEx(){
- if(D.ex){if(!D.ex.g2){D.ex.g2={};D.ex.gmode={};D.ex.g2c={};D.ex.dual={};CL.forEach(c=>{if(c.startsWith('تجربی'))D.ex.dual[c]=true})}return D.ex}
+ if(D.ex){if(!D.ex.g2){D.ex.g2={};D.ex.gmode={};D.ex.g2c={};D.ex.dual={};CL.forEach(c=>{if(c.startsWith('تجربی'))D.ex.dual[c]=true})}if(!D.ex.pz)D.ex.pz={};return D.ex}
  const t=mid(new Date()),sat=new Date(t.getTime()-((t.getDay()+1)%7)*DAY);
- const E=D.ex={anchor:sat.toISOString().slice(0,10),per:4,tt:{},g:{},g2:{},gmode:{},g2c:{},dual:{},fixed:{},skip:{},pw:{}};CL.forEach(c=>{if(c.startsWith('تجربی'))E.dual[c]=true});
+ const E=D.ex={anchor:sat.toISOString().slice(0,10),per:4,tt:{},g:{},g2:{},gmode:{},g2c:{},dual:{},fixed:{},skip:{},pw:{},pz:{}};CL.forEach(c=>{if(c.startsWith('تجربی'))E.dual[c]=true});
  const subs=['ریاضی','فیزیک','شیمی','زیست','ادبیات','عربی','دین و زندگی','زبان'];
  CL.forEach((c)=>{{const L8=c.startsWith('ریاضی')?['ریاضی','هندسه','فیزیک','شیمی','ادبیات','عربی','دین و زندگی','زبان']:subs, ci=c==='ریاضی ۳۱۱'?2:c==='تجربی ۳۲۲'?1:0;E.tt[c]=[0,1,2,3].map(d=>Array.from({length:4},(_,p)=>L8[((d%2)*4+p+ci*3)%8]))}autoDiv(c,'n',true)});
  CL.forEach(c=>D.students.filter(x=>x.cls===c).slice(0,3).forEach(x=>E.skip[x.id]=['دین و زندگی','زبان']));
@@ -323,7 +317,7 @@ function rd(eid:string,sid:string){const e=D.exams.find(x=>x.id===eid),s=D.stude
  <p class="m" style="text-align:center">${esc(e.title)} · ${e.inst} · ${esc(e.date)} · ${s.cls}</p>
  <div class="g"><div class="c k"><b>${n(r.level)}</b><span>تراز ${pl!=null?dl(r.level-pl):''}</span></div><div class="c k"><b>${n(r.rank)}</b><span>رتبه‌ی کشوری</span></div><div class="c k"><b>${n(rc)} از ${n(mates.length)}</b><span>رتبه در کلاس</span></div></div>
  <div class="g2" style="margin-top:10px"><div class="c tw"><h3>دروس</h3><table><thead><tr><th>درس</th><th>درصد</th><th>درست/غلط/نزده</th><th>تراز درس</th><th>میانگین کلاس</th></tr></thead><tbody>${keys.map(k=>{const v=r.subj[k],ca=avg(mates.map(x=>e.res[x.id].subj?.[k])),w=r.raw?.[k];return `<tr style="cursor:default"><td>${esc(k)}</td><td style="${hue(v)}"><b>${n(v)}٪</b></td><td>${w?`${n(w[0])} / ${n(w[1])} / ${n(w[2])}`:'—'}</td><td>${n(r.slv?.[k])}</td><td>${n(ca)}٪ ${dl(ca==null?null:v-ca)}</td></tr>`}).join('')}</tbody></table></div>
- <div class="c"><h3>روند تراز ${e.inst}</h3>${same.length>1?line(same.map(x=>x.date.slice(5)),[{name:s.name,c:'var(--ac)',v:same.map(x=>x.res[sid].level)}]):'<p class="m">برای نمودار حداقل دو آزمون لازم است</p>'}</div></div>
+ <div class="c"><h3>روند تراز ${e.inst}</h3>${same.length>1?line(same.map(x=>x.date.slice(5)),[{name:s.name,c:'var(--ac)',v:same.map(x=>x.res[sid].level),area:true}],i=>{const r=same[i].res[sid],p=i?same[i-1].res[sid]:null;return esc(same[i].title)+' · '+esc(same[i].date)+(r?.rank!=null?'<br>رتبه‌ی کشوری: <b>'+n(r.rank)+'</b>':'')+(p?'<br>تراز نسبت به قبل: '+chg(r.level-p.level,'up',n)+(r.rank!=null&&p.rank!=null?'<br>رتبه نسبت به قبل: '+chg(r.rank-p.rank,'down',n):''):'')}):'<p class="m">برای نمودار حداقل دو آزمون لازم است</p>'}</div></div>
  <div class="tb" style="margin-top:10px"><button class="btn" onclick="op('${sid}')">پروفایل کامل</button><button class="btn" onclick="cm()">بستن</button></div>`;$('#md').classList.add('on')}
 
 const ana=()=>seg('as',[['o','نمای کلی'],['c','نمودارها']])+(U.as==='c'&&['sav','sstu','sdist'].includes(U.ct)?'':insSeg())+(U.as==='c'?cht():dash());
@@ -457,23 +451,35 @@ const setT=(cl:string,d:number,p:number,v:string)=>{tt(cl)[d][p]=v.trim();save()
 const setPair=(v:boolean)=>{ensureEx().pair=v;save()};
 const per=(k:number)=>{const E=ensureEx();E.per=Math.max(3,Math.min(8,E.per+k));save();draw()};
 /* progress */
-function pickKeys(cl:string,sid:string,w:number){const E=ensureEx(),sk=E.skip[sid]||[],out:string[]=[],used=new Set<string>(),cand:any[]=[];
- for(let d=0;d<4;d++)for(let p=0;p<E.per;p++){const s=subj(cl,d,p);if(sk.includes(s)&&!status(sid,cl,w,d,p))cand.push([d,p,s])}
- for(const[d,p,s]of cand)if(out.length<2&&!used.has(s)){used.add(s);out.push(d+'-'+p)}
- for(const[d,p]of cand){const k=d+'-'+p;if(out.length<2&&!out.includes(k))out.push(k)}
+// زنگ‌های مجاز برای معافیت پیشرفت = چند زنگِ مشخص از برنامه‌ی هفتگیِ همان کلاس (مثلاً «شنبه زنگ ۳»)، برای هر کلاس جدا. اگر هنوز چیزی انتخاب نشده باشد، همه‌ی زنگ‌های هفته مجازند.
+const allSlots=(E:any)=>{const o:string[]=[];for(let d=0;d<4;d++)for(let p=0;p<E.per;p++)o.push(d+'-'+p);return o};
+function pgAllowed(cl:string):string[]{const E=ensureEx(),z=E.pz[cl],all=allSlots(E);if(!Array.isArray(z))return all;
+ // نسخه‌ی قبلیِ همین قابلیت فقط «شماره‌ی زنگ» نگه می‌داشت؛ آن را به زنگ‌های همه‌ی روزها تبدیل می‌کنیم
+ const out=z.flatMap((x:any)=>typeof x==='number'?[0,1,2,3].map(d=>d+'-'+x):[String(x)]);return [...new Set(out)].filter(k=>all.includes(k))}
+// cnt زنگ برای این دانش‌آموز انتخاب می‌کند: فقط از زنگ‌های مجازِ کلاسش و فقط زنگ‌هایی که معاف نیست؛ ترجیحاً در روزهای مختلف و جایی که کمتر دانش‌آموز معاف دارد
+function pickKeys(cl:string,sid:string,w:number,cnt=2){const cand:any[]=[];
+ for(const k of pgAllowed(cl)){const[d,p]=k.split('-').map(Number);if(!status(sid,cl,w,d,p))cand.push({d,p,load:pgIn(cl,w,d,p).length})}
+ cand.sort((a,b)=>a.load-b.load||a.d-b.d||a.p-b.p);
+ const out:string[]=[],days=new Set<number>();
+ for(const c of cand)if(out.length<cnt&&!days.has(c.d)){days.add(c.d);out.push(c.d+'-'+c.p)}
+ for(const c of cand){const k=c.d+'-'+c.p;if(out.length<cnt&&!out.includes(k))out.push(k)}
  return out}
-function xprog(){const cl=U.xc,w=U.w,E=ensureEx(),ss=snap().filter((s:any)=>s.cls===cl),T=tt(cl),subs=[...new Set(T.flat().filter(Boolean))] as string[],pw=E.pw[w]||{};
+function xprog(){const cl=U.xc,w=U.w,E=ensureEx(),ss=snap().filter((s:any)=>s.cls===cl),pw=E.pw[w]||{},al=pgAllowed(cl);
  const sug=new Set(ss.filter((s:any)=>s.d>0).sort((a:any,b:any)=>b.d-a.d).slice(0,3).map((s:any)=>s.id));
+ const lab=(k:string)=>{const[d,p]=k.split('-'),s=tt(cl)[+d]?.[+p];return `${DAYN[+d]} زنگ ${n(+p+1)}${s?' · '+esc(s):''}`};
  const cards=[...ss].sort((a:any,b:any)=>(sug.has(b.id)?1:0)-(sug.has(a.id)?1:0)||(b.l||0)-(a.l||0)).map((s:any)=>`<div class="exstu ${pw[s.id]?'has':''}"><div class="tb" style="margin:0 0 8px;flex-wrap:nowrap"><div class="av">${esc(xini(s.name))}</div><div style="flex:1;min-width:0"><b>${esc(s.name)}</b>${sug.has(s.id)?' <span class="tag" style="background:#8b5cf6;color:#fff;border-color:#8b5cf6">⭐ پیشنهاد</span>':''}<div class="m">تراز ${n(s.l)} ${dl(s.d)}</div></div></div>
-  <div class="m" style="margin-bottom:4px">درس‌های دلخواه برای معافیت:</div><div class="chips" style="margin:0 0 10px">${subs.map(k=>`<button class="${(E.skip[s.id]||[]).includes(k)?'on':''}" onclick="tgSkip('${s.id}','${esc(k)}')">${esc(k)}</button>`).join('')||'<span class="m">اول برنامه‌ی کلاسی را وارد کنید</span>'}</div>
-  <div class="tb" style="margin:0">${pw[s.id]?`${pw[s.id].map((k:string)=>{const[d,p]=k.split('-');return `<span class="tag" style="background:#ec4899;color:#fff;border-color:#ec4899">${DAYN[+d]} ساعت ${n(+p+1)} ${esc(subj(cl,+d,+p))}</span>`}).join('')}<span style="flex:1"></span><button class="btn" onclick="revoke('${s.id}')">لغو</button>`:`<span class="m" style="flex:1">این هفته معافیت پیشرفت ندارد</span><button class="btn p" onclick="grant('${s.id}')">🚀 اعطا</button>`}</div></div>`).join('');
- return `<div class="c"><b>🚀 معافیت پیشرفت</b><p class="m" style="margin:6px 0 0">۱) درس‌هایی را که هر دانش‌آموز نمی‌خواهد در آن‌ها حاضر شود انتخاب کنید (فقط درس‌های برنامه‌ی همین کلاس). ۲) «اعطا» دو ساعت از همان درس‌ها را که این هفته معاف نیست خودکار تعیین می‌کند؛ بعداً در تقویم قابل تغییر است. ⭐ یعنی بیشترین پیشرفت تراز.</p></div>
+  <div class="tb" style="margin:0;flex-wrap:wrap">${pw[s.id]?`${pw[s.id].map((k:string)=>`<span class="tag" style="background:#ec4899;color:#fff;border-color:#ec4899">${lab(k)}</span>`).join('')}<span style="flex:1"></span><button class="btn" onclick="revoke('${s.id}')">لغو</button>`:`<span class="m" style="flex:1">این هفته معافیت پیشرفت ندارد</span><button class="btn p" onclick="grant('${s.id}',1)">🚀 ۱ زنگ</button><button class="btn p" onclick="grant('${s.id}',2)">🚀 ۲ زنگ</button>`}</div></div>`).join('');
+ const grid=(c:string)=>{const al=new Set(pgAllowed(c));return `<div style="flex:1 1 340px;min-width:0"><div class="tb" style="margin:0 0 6px"><b style="flex:1">${c}</b><span class="m">${n(al.size)} زنگ انتخاب شده</span><button class="btn" onclick="pzAll('${c}',1)">همه</button><button class="btn" onclick="pzAll('${c}',0)">هیچ</button></div><div><table class="pzg"><thead><tr><th></th>${Array.from({length:E.per},(_,p)=>`<th>زنگ ${n(p+1)}</th>`).join('')}</tr></thead><tbody>${[0,1,2,3].map(d=>`<tr><th>${DAYN[d]}</th>${Array.from({length:E.per},(_,p)=>{const k=d+'-'+p,s=tt(c)[d]?.[p];return `<td><button class="${al.has(k)?'on':''}" onclick="togPz('${c}','${k}')">${s?esc(s):'—'}</button></td>`}).join('')}</tr>`).join('')}</tbody></table></div></div>`};
+ const set=`<div class="c"><b>⚙️ زنگ‌های مجاز برای معافیت پیشرفت</b><p class="m" style="margin:6px 0 10px">برنامه‌ی هفتگیِ هر کلاس را می‌بینید. زنگ‌هایی را که می‌خواهید معافیت پیشرفت فقط در آن‌ها داده شود روشن (صورتی) کنید؛ برای هر کلاس جدا. «اعطا» فقط از همین زنگ‌ها (در روزهایی که دانش‌آموز معاف نیست) انتخاب می‌کند.</p><div style="display:flex;gap:18px;flex-wrap:wrap">${CL.map(grid).join('')}</div></div>`;
+ return set+`<div class="c" style="margin-top:10px"><b>🚀 معافیت پیشرفت — ${cl}</b><p class="m" style="margin:6px 0 0">زنگ‌های مجاز این کلاس: <b>${n(al.length)} زنگ از برنامه‌ی هفتگی</b>. برای هر دانش‌آموز می‌توانید <b>۱ زنگ</b> یا <b>۲ زنگ</b> اعطا کنید؛ زنگ‌ها خودکار (ترجیحاً در روزهای مختلف و جایی که کمتر معاف دارد) تعیین می‌شوند و بعداً در تقویم قابل تغییرند. ⭐ یعنی بیشترین پیشرفت تراز.</p></div>
  <div style="margin-top:10px">${insSeg()}</div><div class="exsg">${cards}</div>`}
 function tgSkip(id:string,k:string){const E=ensureEx(),a=E.skip[id]||[];E.skip[id]=a.includes(k)?a.filter(x=>x!==k):[...a,k];save();draw()}
-function grant(id:string){const s=D.students.find(x=>x.id===id),keys=pickKeys(s.cls,id,U.w);
- if(!keys.length){alert('هیچ کلاسی مناسب نیست: یا درس دلخواه انتخاب نشده، یا همه‌ی ساعت‌های آن درس در این هفته به‌خاطر معافیت گروه/معلم از قبل معاف است.');return}
- if(keys.length<2)alert('فقط یک ساعت مناسب پیدا شد (ساعت‌هایی که از قبل معاف است حساب نمی‌شود). درس دلخواه بیشتری انتخاب کنید.');
+function grant(id:string,cnt=2){const s=D.students.find(x=>x.id===id),keys=pickKeys(s.cls,id,U.w,cnt);
+ if(!keys.length){alert('هیچ زنگی برای این دانش‌آموز آزاد نیست: یا برای این کلاس زنگ مجاز انتخاب نشده، یا همه‌ی زنگ‌های مجاز این هفته به‌خاطر معافیت گروه/معلم از قبل معاف است.');return}
+ if(keys.length<cnt)alert('فقط '+n(keys.length)+' زنگ مناسب پیدا شد (زنگ‌هایی که از قبل معاف است حساب نمی‌شود). می‌توانید در تنظیم «زنگ‌های مجاز» زنگ بیشتری را فعال کنید.');
  const E=ensureEx();(E.pw[U.w]=E.pw[U.w]||{})[id]=keys;save();draw()}
+function togPz(cl:string,k:string){const E=ensureEx(),a=pgAllowed(cl);E.pz[cl]=a.includes(k)?a.filter((x:string)=>x!==k):[...a,k];save();draw()}
+function pzAll(cl:string,on:number){const E=ensureEx();E.pz[cl]=on?allSlots(E):[];save();draw()}
 function revoke(id:string){const m=ensureEx().pw[U.w]||{};delete m[id];save();draw()}
 /* export image */
 let FB:string|null=null;
@@ -581,6 +587,6 @@ if(typeof document.addEventListener==='function'){
 initUi();
 initPwa();
 
-Object.assign(W,{setGMode,setG2c,setDual,gmodeAll,gmodeAlt,autoDiv2,wk0,snaps,snapRestore,annOnly,setRot,annType,annExp,annNew,annDel,annClean,restoreB,openPal,palGo,palHi,toast,stuNav,addNote,delNote,rd,repCsv,repg,setNum,renum,sf,applyRng,setRng,setPair,schp,newSch,schMeta,schS,schL,schLA,schRename,schMove,schBulk,schLR,schDel,schCsv,cellm,tgFx,addPw,rmPw,setG,autoDiv,setT,per,grant,revoke,tgSkip,wstep,xpng,home,U,D,go,draw,op,cm,sg,sn,delS,addS,sr,addE,paste,delE,x1,x2,x3,x4,bk,reset,wipe,pick,rmf,sfs,er,commit1,commitAll,get FILES(){return FILES},set FILES(v){FILES=v}});
+Object.assign(W,{togPz,pzAll,setGMode,setG2c,setDual,gmodeAll,gmodeAlt,autoDiv2,wk0,snaps,snapRestore,annOnly,setRot,annType,annExp,annNew,annDel,annClean,restoreB,openPal,palGo,palHi,toast,stuNav,addNote,delNote,rd,repCsv,repg,setNum,renum,sf,applyRng,setRng,setPair,schp,newSch,schMeta,schS,schL,schLA,schRename,schMove,schBulk,schLR,schDel,schCsv,cellm,tgFx,addPw,rmPw,setG,autoDiv,setT,per,grant,revoke,tgSkip,wstep,xpng,home,U,D,go,draw,op,cm,sg,sn,delS,addS,sr,addE,paste,delE,x1,x2,x3,x4,bk,reset,wipe,pick,rmf,sfs,er,commit1,commitAll,get FILES(){return FILES},set FILES(v){FILES=v}});
 draw();
 }

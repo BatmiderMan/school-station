@@ -1,5 +1,7 @@
 // فضای تحلیل «تراز و رتبه»ی یک دانش‌آموز. ماز و قلم‌چی جدا بررسی می‌شوند (مقیاس تراز و رتبه‌ی آن‌ها با هم قابل مقایسه‌ی مستقیم نیست)
 // و یک نمای «مقایسه» هم هست که هر مؤسسه را نسبت به خودش و نسبت به هم‌کلاسی‌ها می‌سنجد. درصد دروس اینجا نیست (در کارنامه‌ی هر آزمون است).
+import { lineChart, chg } from './chart';
+
 export function mkTrend(A: any) {
   const esc = A.esc, n = A.n, n1 = A.n1;
   const INST = ['ماز', 'قلم‌چی'];
@@ -26,32 +28,7 @@ export function mkTrend(A: any) {
   }
 
   /* ---------- نمودار ---------- */
-  function chart(labels: string[], series: any[], o: any = {}) {
-    const W = 640, H = o.h || 250, pl = 56, pr = 16, pt = 22, pb = 34, N = labels.length;
-    const vals = series.flatMap((s) => s.v).filter((x: any) => x != null && isFinite(x));
-    if (!vals.length) return '<p class="m">داده‌ای نیست</p>';
-    let lo = Math.min(...vals), hi = Math.max(...vals); if (o.ref) { lo = Math.min(lo, o.ref.v); hi = Math.max(hi, o.ref.v); }
-    const pad = (hi - lo) * 0.14 || Math.abs(hi) * 0.06 || 1; lo -= pad; hi += pad;
-    const X = (i: number) => (N < 2 ? (pl + W - pr) / 2 : W - pr - ((W - pl - pr) * i) / (N - 1));
-    const Y = (v: number) => { const t = (v - lo) / (hi - lo); return o.invert ? pt + (H - pt - pb) * t : pt + (H - pt - pb) * (1 - t); };
-    const fmt = o.fmt || ((x: number) => n(x));
-    let s = `<svg viewBox="0 0 ${W} ${H}" width="100%">`;
-    for (let k = 0; k <= 4; k++) { const v = lo + ((hi - lo) * k) / 4, y = Y(v); s += `<line x1="${pl}" x2="${W - pr}" y1="${y}" y2="${y}" stroke="var(--bd)"/><text x="${pl - 7}" y="${y + 4}" text-anchor="end">${fmt(v)}</text>`; }
-    const step = Math.ceil(N / 8); labels.forEach((l, i) => { if (i % step === 0 || i === N - 1) s += `<text x="${X(i)}" y="${H - 12}" text-anchor="middle">${esc(l)}</text>`; });
-    if (o.ref) { const y = Y(o.ref.v); s += `<line x1="${pl}" x2="${W - pr}" y1="${y}" y2="${y}" stroke="${o.ref.c || '#888'}" stroke-dasharray="2 5" opacity=".75"/>`; }
-    series.forEach((se) => {
-      const pts = se.v.map((v: any, i: number) => (v == null ? null : [X(i), Y(v), v, i])).filter(Boolean) as number[][];
-      if (!pts.length) return;
-      const d = pts.map((p, j) => (j ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
-      if (se.area && !o.invert) s += `<path d="${d} L${pts[pts.length - 1][0].toFixed(1)} ${H - pb} L${pts[0][0].toFixed(1)} ${H - pb} Z" fill="${se.c}" opacity=".13"/>`;
-      s += `<path d="${d}" fill="none" stroke="${se.c}" stroke-width="${se.w || 2.6}" ${se.dash ? 'stroke-dasharray="6 5"' : ''} stroke-linejoin="round" stroke-linecap="round"/>`;
-      if (se.dots !== false) pts.forEach((p) => { s += `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${se.dash ? 2.4 : 4}" fill="${se.c}"><title>${esc(labels[p[3]])}: ${fmt(p[2])}</title></circle>`; });
-      if (se.lab) pts.forEach((p, j) => { if (se.lab === 'all' || j === 0 || j === pts.length - 1) s += `<text x="${p[0].toFixed(1)}" y="${(p[1] + (o.invert ? 17 : -9)).toFixed(1)}" text-anchor="middle" style="fill:${se.c};font-weight:700">${fmt(p[2])}</text>`; });
-    });
-    s += '</svg>';
-    const leg = series.filter((x) => x.name).map((x) => `<span><b style="color:${x.c}">${x.dash ? '┅' : '●'}</b> ${esc(x.name)}</span>`).join('') + (o.ref ? `<span><b style="color:${o.ref.c || '#888'}">┈</b> ${esc(o.ref.name)}</span>` : '');
-    return s + (leg ? `<div class="m" style="display:flex;gap:14px;flex-wrap:wrap;margin-top:4px">${leg}</div>` : '');
-  }
+  const chart = (labels: string[], series: any[], o: any = {}) => lineChart(labels, series, o);
   /** میله‌های دوطرفه: بالاتر/پایین‌تر از میانگین هم‌کلاسی‌ها */
   function diffBars(R: Row[]) {
     const L = R.filter((r) => r.cav != null).reverse(); if (!L.length) return '<p class="m">میانگین کلاس هنوز قابل محاسبه نیست (حداقل دو نفر نتیجه لازم است).</p>';
@@ -89,12 +66,14 @@ export function mkTrend(A: any) {
     if (last.lv >= bestR.lv && R.length > 1) notes.push('آخرین آزمون بهترین تراز او تا امروز است.');
     else if (bestR.lv - last.lv > 0) notes.push(`${n(bestR.lv - last.lv)} تراز تا بهترین نتیجه‌اش (${esc(bestR.e.title)}) فاصله دارد.`);
     if (R.length >= 3 && proj != null) notes.push('«برآورد بعدی» فقط ادامه‌ی خط روند است و پیش‌بینی قطعی نیست؛ سختی آزمون‌ها با هم فرق دارد.');
+    // جزئیاتی که با رفتن روی هر نقطه‌ی نمودار دیده می‌شود
+    const info = (i: number) => { const r = R[i]; return `${esc(r.e.title)} · ${esc(r.e.date)}<br>رتبه‌ی کشوری: <b>${r.rk != null ? n(r.rk) : '—'}</b>${r.cav != null ? `<br>میانگین کلاس: ${n(Math.round(r.cav))} · جایگاه در کلاس: ${n(r.cr)} از ${n(r.cn)}` : ''}${r.d != null ? `<br>تراز نسبت به قبل: ${chg(r.d, 'up', n)}` : ''}${r.dr != null ? `<br>رتبه نسبت به قبل: ${chg(-r.dr, 'down', n)}` : ''}`; };
     const labels = R.map((r) => r.e.date.slice(5)), ma = lv.map((_, i) => (i < 2 ? null : mean(lv.slice(i - 2, i + 1))));
     const levelChart = chart(labels, [
       { name: 'تراز او', c, v: lv, area: true, lab: R.length <= 8 ? 'all' : 'ends' },
       ...(R.length >= 3 ? [{ name: 'میانگین متحرک ۳ آزمون', c: '#10b981', v: ma, dash: true, w: 2 }] : []),
-      ...(R.some((r) => r.cav != null) ? [{ name: 'میانگین کلاس', c: '#94a3b8', v: R.map((r) => r.cav), dash: true, w: 2 }] : [])], { ref: { v: m, c: c, name: 'میانگین خودش' } });
-    const rankChart = rk.length ? chart(labels, [{ name: 'رتبه‌ی کشوری', c, v: R.map((r) => r.rk), lab: R.length <= 8 ? 'all' : 'ends' }], { invert: true, h: 220, fmt: (x: number) => n(Math.round(x)) }) + '<p class="m" style="margin:2px 0 0">بالاتر = رتبه‌ی بهتر</p>' : '<p class="m">رتبه ثبت نشده است.</p>';
+      ...(R.some((r) => r.cav != null) ? [{ name: 'میانگین کلاس', c: '#94a3b8', v: R.map((r) => r.cav), dash: true, w: 2 }] : [])], { ref: { v: m, c: c, name: 'میانگین خودش' }, extra: info });
+    const rankChart = rk.length ? chart(labels, [{ name: 'رتبه‌ی کشوری', c, v: R.map((r) => r.rk), lab: R.length <= 8 ? 'all' : 'ends' }], { invert: true, h: 220, fmt: (x: number) => n(Math.round(x)), extra: info }) + '<p class="m" style="margin:2px 0 0">بالاتر = رتبه‌ی بهتر</p>' : '<p class="m">رتبه ثبت نشده است.</p>';
     const hi = (t: string, r: Row | undefined, v: string) => (r ? `<div class="c k"><span>${t}</span><b style="font-size:17px">${v}</b><span>${esc(r.e.title)} · ${esc(r.e.date)}</span></div>` : '');
     const tableRows = [...R].reverse().map((r) => `<tr style="cursor:default"><td>${esc(r.e.date)}</td><td>${esc(r.e.title)}</td><td><b>${n(r.lv)}</b></td><td>${dl(r.d)}</td><td>${r.rk != null ? n(r.rk) : '—'}</td><td>${r.dr == null ? '<span class="m">—</span>' : r.dr === 0 ? '<span class="m">＝</span>' : `<span class="${r.dr > 0 ? 'up' : 'dn'}">${r.dr > 0 ? '▲' : '▼'} ${n(Math.abs(r.dr))}</span>`}</td><td>${n(r.cr)} از ${n(r.cn)}</td><td style="min-width:90px"><div class="bar"><i style="width:${Math.max(3, (r.lv / bestR.lv) * 100)}%;background:${c}"></i></div></td></tr>`).join('');
     return `${kpis}
@@ -110,6 +89,7 @@ export function mkTrend(A: any) {
     const per: any = {}; INST.forEach((i) => (per[i] = rows(s, i)));
     if (!per['ماز'].length && !per['قلم‌چی'].length) return '<div class="c m" style="text-align:center;padding:26px">هنوز نتیجه‌ای ثبت نشده است.</div>';
     const all = exams().filter((e: any) => e.res[s.id]), labels = all.map((e: any) => e.date.slice(5));
+    const exInfo = (i: number) => { const e = all[i], r = e.res[s.id]; return `${esc(e.title)} · ${esc(e.date)}<br>تراز: <b>${n(r.level)}</b>${r.rank != null ? ` · رتبه‌ی کشوری: <b>${n(r.rank)}</b>` : ''}`; };
     const best = (i: string) => (per[i].length ? Math.max(...per[i].map((r: Row) => r.lv)) : 1);
     const relBest = INST.map((i) => ({ name: i, c: IC[i], v: all.map((e: any) => (e.inst === i ? (e.res[s.id].level / best(i)) * 100 : null)), area: false, lab: 'none' }));
     const relCls = INST.map((i) => ({ name: i, c: IC[i], v: all.map((e: any) => { if (e.inst !== i) return null; const r = per[i].find((x: Row) => x.e === e); return r && r.cav ? ((r.lv - r.cav) / r.cav) * 100 : null; }) }));
@@ -119,8 +99,8 @@ export function mkTrend(A: any) {
     const a = col('ماز'), b = col('قلم‌چی');
     return `<div class="c tw"><h3>ماز و قلم‌چی کنار هم</h3><table><thead><tr><th></th><th style="color:${IC['ماز']}">ماز</th><th style="color:${IC['قلم‌چی']}">قلم‌چی</th></tr></thead><tbody>${names.map((t, k) => `<tr style="cursor:default"><td class="m">${t}</td><td><b>${a[k]}</b></td><td><b>${b[k]}</b></td></tr>`).join('')}</tbody></table>
     <p class="m" style="margin:8px 0 0">ترازِ ماز و قلم‌چی مقیاس یکسان ندارند؛ برای همین فقط روند و جایگاه نسبی را کنار هم می‌گذارم، نه خود عددها را.</p></div>
-    <div class="g2" style="margin-top:10px"><div class="c"><h3>تراز نسبت به بهترین نتیجه‌ی خودش (۱۰۰ = بهترین)</h3>${chart(labels, relBest, { fmt: (x: number) => n(Math.round(x)) })}</div>
-    <div class="c"><h3>فاصله از میانگین هم‌کلاسی‌ها (٪)</h3>${chart(labels, relCls, { fmt: (x: number) => `${x >= 0 ? '+' : '−'}${n1(Math.abs(x))}٪`, ref: { v: 0, c: '#94a3b8', name: 'میانگین کلاس' } })}</div></div>`;
+    <div class="g2" style="margin-top:10px"><div class="c"><h3>تراز نسبت به بهترین نتیجه‌ی خودش (۱۰۰ = بهترین)</h3>${chart(labels, relBest, { fmt: (x: number) => n(Math.round(x)), extra: exInfo })}</div>
+    <div class="c"><h3>فاصله از میانگین هم‌کلاسی‌ها (٪)</h3>${chart(labels, relCls, { fmt: (x: number) => `${x >= 0 ? '+' : '−'}${n1(Math.abs(x))}٪`, ref: { v: 0, c: '#94a3b8', name: 'میانگین کلاس' }, extra: exInfo })}</div></div>`;
   }
 
   /* ---------- ورودی ---------- */

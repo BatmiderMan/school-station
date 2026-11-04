@@ -1,6 +1,7 @@
 // تاریخچه‌ی تماس با والدین: تماس‌های ثبت‌شده در غیبت‌ها + تماس‌های دستی مدیر.
 import { sb } from './supa';
 import { online, down, cacheGet, cacheSet, withTimeout, retryable, flush, pending } from './offq';
+import { iso2j, j2iso } from './ui';
 
 type ManualCall = { id: string; student: string; at: string; contact: string; phone?: string; reason: string; outcome: string; note: string; followup: string };
 type AbsenceCall = { student_id: string; day: string; note: string; updated_at?: string };
@@ -15,7 +16,10 @@ export function mkCalls(A: any) {
   const norm = (s: any) => String(s ?? '').replace(/[۰-۹]/g, (x) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(x))).replace(/[٠-٩]/g, (x) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(x))).replace(/ي/g, 'ی').replace(/ك/g, 'ک').toLowerCase().trim();
   const val = (id: string) => (document.getElementById(id) as HTMLInputElement | null)?.value || '';
   const localNow = () => { const d = new Date(), z = new Date(d.getTime() - d.getTimezoneOffset() * 60000); return z.toISOString().slice(0, 16); };
-  const dateFa = (iso: string) => new Date(iso).toLocaleDateString('fa-IR', { year: 'numeric', month: 'long', day: 'numeric' });
+  const dateFa = (iso: string) => new Date(iso).toLocaleDateString('fa-IR-u-ca-persian', { year: 'numeric', month: 'long', day: 'numeric' });
+  const JMN = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'];
+  // تاریخ شمسی (۱۴۰۵/۰۸/۱۲) از تاریخ میلادی ذخیره‌شده (۲۰۲۶-۱۱-۰۳)؛ ذخیره‌ها همان قبلی می‌ماند
+  const jOf = (iso: string) => (iso ? iso2j(String(iso).slice(0, 10)) : '');
   const when = (iso: string) => new Date(iso).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
 
   const usable = () => A.SV.isMgr() || !!(window as any).__OFFLINE;
@@ -51,7 +55,7 @@ export function mkCalls(A: any) {
     return combined().filter((x: any) => {
       const s = byId(x.student);
       return (C.source === 'all' || x.source === C.source) && (C.cls === 'all' || s?.cls === C.cls) && (C.student === 'all' || x.student === C.student)
-        && (!q || norm([s?.name, s?.cls, s?.num, x.reason, x.note, x.contact, x.outcome, x.date].join(' ')).includes(q));
+        && (!q || norm([s?.name, s?.cls, s?.num, x.reason, x.note, x.contact, x.outcome, x.date, jOf(x.date)].join(' ')).includes(q));
     });
   }
   const outLabel: any = { reached: 'صحبت شد', no_answer: 'پاسخ ندادند', followup: 'پیگیری لازم' };
@@ -67,16 +71,16 @@ export function mkCalls(A: any) {
     const rows = filtered();
     if (!rows.length) return `<div class="c m" style="text-align:center;padding:28px">تماسی با این فیلتر پیدا نشد.</div>`;
     const groups: Record<string, any[]> = {};
-    rows.forEach((x: any) => { const month = x.date.slice(0, 7); (groups[month] = groups[month] || []).push(x); });
-    return Object.entries(groups).map(([month, items]) => `<section class="call-month"><h3>${new Date(month + '-01T12:00:00').toLocaleDateString('fa-IR', { month: 'long', year: 'numeric' })} <span class="m">${n(items.length)} تماس</span></h3>${items.map(card).join('')}</section>`).join('');
+    rows.forEach((x: any) => { const month = jOf(x.date).slice(0, 7); (groups[month] = groups[month] || []).push(x); });
+    return Object.entries(groups).map(([month, items]) => `<section class="call-month"><h3>${JMN[+month.slice(5, 7) - 1]} ${(+month.slice(0, 4)).toLocaleString('fa-IR', { useGrouping: false })} <span class="m">${n(items.length)} تماس</span></h3>${items.map(card).join('')}</section>`).join('');
   }
   function form() {
     const x = manual().find((r) => r.id === C.edit), edit = !!x;
     const chosen = x?.student || (C.student !== 'all' ? C.student : '');
     const opts = students().map((s: any) => `<option value="${s.id}" ${chosen === s.id ? 'selected' : ''}>${n(s.num)} · ${esc(s.name)} — ${esc(s.cls)}</option>`).join('');
     return `<div class="c call-form"><div class="tb" style="margin:0 0 10px"><h3 style="margin:0;flex:1">${edit ? 'ویرایش تماس' : 'ثبت تماس جدید'}</h3>${edit ? '<button class="btn" onclick="CALL_cancel()">انصراف از ویرایش</button>' : ''}</div>
-      <div class="call-fields"><label>دانش‌آموز<select id="call-student" onchange="CALL_studentPhone(this.value)"><option value="">انتخاب کنید…</option>${opts}</select></label><label>زمان تماس<input id="call-at" type="datetime-local" value="${esc(x?.at || localNow())}"></label><label>مخاطب<select id="call-contact">${['مادر','پدر','سرپرست','سایر'].map((v) => `<option ${x?.contact === v ? 'selected' : ''}>${v}</option>`).join('')}</select></label><label>نتیجه<select id="call-outcome">${Object.entries(outLabel).map(([k, v]) => `<option value="${k}" ${x?.outcome === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label></div>
-      <div class="call-fields call-fields-wide"><label>موضوع تماس<input id="call-reason" maxlength="160" value="${esc(x?.reason || '')}" placeholder="مثلاً وضعیت درسی، رفتار، هماهنگی جلسه…"></label><label>شماره تماس<input id="call-phone" dir="ltr" inputmode="tel" maxlength="30" value="${esc(x?.phone || byId(chosen)?.phone || '')}" placeholder="اختیاری"></label><label>تاریخ پیگیری (اختیاری)<input id="call-followup" type="date" value="${esc(x?.followup || '')}"></label></div>
+      <div class="call-fields"><label>دانش‌آموز<select id="call-student" onchange="CALL_studentPhone(this.value)"><option value="">انتخاب کنید…</option>${opts}</select></label><label>زمان تماس<span style="display:flex;gap:6px"><input id="call-at-d" class="dp" readonly placeholder="📅 تاریخ" value="${esc(jOf((x?.at || localNow()).slice(0, 10)))}" onclick="openJP('call-at-d',{min:false})" style="flex:1.4;min-width:0"><input id="call-at-t" type="time" value="${esc((x?.at || localNow()).slice(11, 16))}" style="flex:1;min-width:0"></span></label><label>مخاطب<select id="call-contact">${['مادر','پدر','سرپرست','سایر'].map((v) => `<option ${x?.contact === v ? 'selected' : ''}>${v}</option>`).join('')}</select></label><label>نتیجه<select id="call-outcome">${Object.entries(outLabel).map(([k, v]) => `<option value="${k}" ${x?.outcome === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label></div>
+      <div class="call-fields call-fields-wide"><label>موضوع تماس<input id="call-reason" maxlength="160" value="${esc(x?.reason || '')}" placeholder="مثلاً وضعیت درسی، رفتار، هماهنگی جلسه…"></label><label>شماره تماس<input id="call-phone" dir="ltr" inputmode="tel" maxlength="30" value="${esc(x?.phone || byId(chosen)?.phone || '')}" placeholder="اختیاری"></label><label>تاریخ پیگیری (اختیاری)<input id="call-followup" class="dp" readonly placeholder="📅 انتخاب" value="${esc(jOf(x?.followup || ''))}" onclick="openJP('call-followup')"></label></div>
       <label class="call-full">شرح گفتگو<textarea id="call-note" maxlength="3000" placeholder="آنچه گفته شد و قرار بعدی را بنویسید…">${esc(x?.note || '')}</textarea></label><div class="tb" style="margin:10px 0 0"><button class="btn p" onclick="CALL_save()">${edit ? 'ذخیره‌ی تغییرات' : 'ثبت تماس'}</button></div></div>`;
   }
   function page() {
@@ -90,7 +94,7 @@ export function mkCalls(A: any) {
       <div id="call-list">${listHtml()}</div>`;
   }
   function saveCall() {
-    const student = val('call-student'), at = val('call-at'), contact = val('call-contact'), outcome = val('call-outcome'), phone = val('call-phone').trim(), reason = val('call-reason').trim(), note = val('call-note').trim(), followup = val('call-followup');
+    const student = val('call-student'), atD = j2iso(val('call-at-d')), atT = val('call-at-t') || '00:00', at = atD ? atD + 'T' + atT : '', contact = val('call-contact'), outcome = val('call-outcome'), phone = val('call-phone').trim(), reason = val('call-reason').trim(), note = val('call-note').trim(), followup = j2iso(val('call-followup')) || '';
     if (!byId(student) || !at || !Number.isFinite(new Date(at).getTime())) { A.toast('دانش‌آموز و زمان تماس را وارد کنید'); return; }
     if (!reason && !note) { A.toast('موضوع یا شرح تماس را بنویسید'); return; }
     const old = manual().find((x) => x.id === C.edit), row: ManualCall = { id: old?.id || 'call-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), student, at, contact, phone, reason, outcome, note, followup };
@@ -106,7 +110,7 @@ export function mkCalls(A: any) {
     CALL_q: (q: string) => { C.q = q; const el = document.getElementById('call-list'); if (el) el.innerHTML = listHtml(); },
     CALL_filter: (key: string, value: string) => { C[key] = value; A.draw(); },
     CALL_refresh: () => load(true),
-    CALL_csv: () => A.dlf('تاریخچه-تماس‌ها.csv', [['تاریخ','دانش‌آموز','کلاس','منبع','مخاطب','شماره تماس','موضوع','نتیجه','شرح','پیگیری'], ...filtered().map((x: any) => { const s = byId(x.student); return [x.source === 'absence' ? x.day + ' (تاریخ غیبت)' : x.at, s?.name || '', s?.cls || '', x.source === 'absence' ? 'غیبت' : 'دستی', x.contact || '', x.phone || s?.phone || '', x.reason || '', x.source === 'absence' ? 'تماس ثبت‌شده' : outLabel[x.outcome] || x.outcome, x.note || '', x.followup || '']; })]),
+    CALL_csv: () => A.dlf('تاریخچه-تماس‌ها.csv', [['تاریخ','دانش‌آموز','کلاس','منبع','مخاطب','شماره تماس','موضوع','نتیجه','شرح','پیگیری'], ...filtered().map((x: any) => { const s = byId(x.student); return [x.source === 'absence' ? jOf(x.day) + ' (تاریخ غیبت)' : jOf(x.at) + ' ' + String(x.at).slice(11, 16), s?.name || '', s?.cls || '', x.source === 'absence' ? 'غیبت' : 'دستی', x.contact || '', x.phone || s?.phone || '', x.reason || '', x.source === 'absence' ? 'تماس ثبت‌شده' : outLabel[x.outcome] || x.outcome, x.note || '', x.followup ? jOf(x.followup) : '']; })]),
     CALL_profile: (id: string) => A.op(id),
     CALL_absence: (id: string) => { A.op(id); U.stab = 'abs'; A.draw(); },
   };
