@@ -6,10 +6,14 @@ import { extractPdfJpeg, fileToRaster } from './loadReport';
 import type { Raster } from './raster';
 import { nameFromFilename, tokens } from './nameMatch';
 import { readMazName, vocabOf } from './mazName';
+import { parseMazCard, cardNameRects } from './mazCard';
+import { V2_HEADINGS } from './mazGlyphs2';
 import { extractPdfText } from './pdfText';
 import { MONTHS, QLesson, baseOf, lev, norm, parseQalamchi, squash } from './qalamchiReport';
 import { MazReport, parseMazReport, sigDistance } from './mazReport';
-import { KNOWN_HEADINGS } from './mazKnown';
+import { KNOWN_HEADINGS as KNOWN_OLD } from './mazKnown';
+// heading shapes of both Maz card layouts (the matcher compares aspect first, so they never get mixed up)
+const KNOWN_HEADINGS = [...KNOWN_OLD, ...V2_HEADINGS];
 
 export interface ImportRow { index: number; label?: string; sectionName: string; partName?: string; n: number; c: number; w: number; level: number | null; countryRank: number | null; recognised: boolean }
 export interface ImportedExam {
@@ -34,9 +38,13 @@ export function rememberHeading(sig: string, name: string): void {
 }
 
 /** the «نام» and «نام خانوادگی» cards of a Maz sheet (fixed layout: 2400 px wide page) as a small picture the manager can read at a glance */
-function mazNameCrop(r: Raster): string {
+function mazNameCrop(r: Raster, v2 = false): string {
   try {
-    const s = r.width / 2400, x0 = Math.round(1680 * s), x1 = Math.min(r.width, Math.round(2364 * s)), y0 = Math.round(430 * s), y1 = Math.min(r.height, Math.round(640 * s));
+    const s = r.width / 2400;
+    // new card: the «نام» + «نام خانوادگی» rows of the «اطلاعات کلی» box (labels included); old card: the two name tiles
+    const nr = v2 ? cardNameRects(r) : null;
+    const x0 = Math.round((nr ? 110 : 1680) * s), x1 = Math.min(r.width, Math.round((nr ? 780 : 2364) * s));
+    const y0 = nr ? Math.round(nr[0].y0 * s - 6 * s) : Math.round(430 * s), y1 = Math.min(r.height, nr ? Math.round(nr[1].y1 * s + 3 * s) : Math.round(640 * s));
     if (x1 - x0 < 50 || y1 - y0 < 30) return '';
     const cv = document.createElement('canvas'); cv.width = r.width; cv.height = r.height; (cv.getContext('2d') as CanvasRenderingContext2D).putImageData(new ImageData(new Uint8ClampedArray(r.data), r.width, r.height), 0, 0);
     const out = document.createElement('canvas'); out.width = x1 - x0; out.height = y1 - y0;
@@ -47,10 +55,20 @@ function mazNameCrop(r: Raster): string {
 const slash = (d: string) => d.replace(/\//g, '/');
 export async function importMaz(file: File, cfg: ExamSettings, roster: string[] = []): Promise<{ exam: ImportedExam; sigs: string[] }> {
   const raster = await fileToRaster(file);
-  const rep: MazReport = parseMazReport(raster);
+  // two layouts exist: the old grey-tile card, and the newer white «کارنامه آزمون ماز» page (name/family inside the sheet). The old reader runs first, so old sheets behave exactly as before.
+  let rep: MazReport, v2 = false;
+  try { rep = parseMazReport(raster); } catch (e: any) {
+    // any failure of the old reader (not only 'layout') means «not the old card»: try the new one, which throws 'layout' if it is neither
+    try { rep = parseMazCard(raster); v2 = true; } catch (e2: any) { throw e2?.message === 'layout' && e?.message !== 'layout' ? e : e2; }
+  }
   // who is it? read the name cards against the roster's words (best effort — a failure only means «no name»)
   let ocrName = '';
-  if (roster.length) { try { ocrName = (await readMazName(raster, vocabOf(roster, tokens))).text; } catch (e) { ocrName = ''; } }
+  if (roster.length) {
+    try {
+      const cards = v2 ? cardNameRects(raster) : null;
+      ocrName = (await readMazName(raster, vocabOf(roster, tokens), cards || undefined)).text;
+    } catch (e) { ocrName = ''; }
+  }
   const known = [...loadSeen(), ...KNOWN_HEADINGS];
   const used = new Set<string>();
   const rows: ImportRow[] = rep.sections.map((s) => {
@@ -73,7 +91,7 @@ export async function importMaz(file: File, cfg: ExamSettings, roster: string[] 
     exam: {
       institute: 'ماز', title: `آزمون ماز${rep.stage ? ' مرحله ' + rep.stage : ''}`, date: rep.date || '', time: rep.time || undefined, rows,
       level: rep.level, countryRank: rep.countryRank, regionRank: rep.regionRank, participants: rep.participants, warnings,
-      detected: { name: ocrName, source: ocrName ? 'ocr' : '', alt: '', crop: mazNameCrop(raster) }
+      detected: { name: ocrName, source: ocrName ? 'ocr' : '', alt: '', crop: mazNameCrop(raster, v2) }
     }
   };
 }

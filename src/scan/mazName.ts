@@ -124,11 +124,20 @@ export function vocabOf(roster: string[], tokens: (s: string) => string[]): stri
   roster.forEach((n) => { const t = tokens(n); t.forEach((x) => x.length >= 2 && set.add(x)); for (let i = 0; i + 1 < t.length; i++) set.add(t[i] + t[i + 1]); });
   return [...set];
 }
+/** a name card, in the 2400-px-wide page's units */
+export interface NameCard { x0: number; x1: number; y0: number; y1: number }
+/** the old Maz sheet: «نام» card (right) and «نام خانوادگی» card (left) */
+const OLD_CARDS: NameCard[] = [{ x0: 2040, x1: 2380, y0: 430, y1: 640 }, { x0: 1700, x1: 2045, y0: 430, y1: 640 }];
 /** returns the words found in the name cards, in reading order, as plain text ('' for words that are not in the roster) */
-export async function readMazName(r: Raster, vocab: string[]): Promise<{ text: string; words: OcrWord[] }> {
-  const s = r.width / 2400, y0 = Math.round(430 * s), y1 = Math.min(r.height, Math.round(640 * s)), g = new Float32Array(r.width * r.height);
+export async function readMazName(r: Raster, vocab: string[], cardsAt: NameCard[] = OLD_CARDS): Promise<{ text: string; words: OcrWord[] }> {
+  const s = r.width / 2400, g = new Float32Array(r.width * r.height);
   for (let i = 0; i < g.length; i++) g[i] = 0.299 * r.data[i * 4] + 0.587 * r.data[i * 4 + 1] + 0.114 * r.data[i * 4 + 2];
-  const card = (a: number, b: number): Gray => { const x0 = Math.round(a * s), x1 = Math.min(r.width, Math.round(b * s)), w = x1 - x0, h = y1 - y0, o = new Float32Array(w * h); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) o[y * w + x] = g[(y0 + y) * r.width + x0 + x]; return { w, h, d: o }; };
-  const words = recognize([card(2040, 2380), card(1700, 2045)], vocab, await canvasRenderer());
+  const card = (c: NameCard): Gray => {
+    const x0 = Math.max(0, Math.round(c.x0 * s)), x1 = Math.min(r.width, Math.round(c.x1 * s)), y0 = Math.max(0, Math.round(c.y0 * s)), y1 = Math.min(r.height, Math.round(c.y1 * s));
+    const w = Math.max(1, x1 - x0), h = Math.max(1, y1 - y0), o = new Float32Array(w * h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) o[y * w + x] = g[(y0 + y) * r.width + x0 + x];
+    return { w, h, d: o };
+  };
+  const words = recognize(cardsAt.map(card), vocab, await canvasRenderer());
   return { text: words.filter((w) => w.token).map((w) => w.token).join(' '), words };
 }

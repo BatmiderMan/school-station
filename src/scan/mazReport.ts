@@ -54,7 +54,7 @@ function readInt(r: Raster, t: Tile, ink: Ink, s: number): { v: number | null; t
 }
 
 /** 32×8 shape signature of the heading ink, used to remember which exam section a heading means */
-function signature(r: Raster, b: Box, ink: Ink): string {
+export function signature(r: Raster, b: Box, ink: Ink): string {
   let bits = ''; const gw = 32, gh = 8; const vals: number[] = [];
   for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) {
     let c = 0, n = 0;
