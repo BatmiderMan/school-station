@@ -58,8 +58,8 @@ export async function importMaz(file: File, cfg: ExamSettings, roster: string[] 
   // two layouts exist: the old grey-tile card, and the newer white «کارنامه آزمون ماز» page (name/family inside the sheet). The old reader runs first, so old sheets behave exactly as before.
   let rep: MazReport, v2 = false;
   try { rep = parseMazReport(raster); } catch (e: any) {
-    // any failure of the old reader (not only 'layout') means «not the old card»: try the new one, which throws 'layout' if it is neither
-    try { rep = parseMazCard(raster); v2 = true; } catch (e2: any) { throw e2?.message === 'layout' && e?.message !== 'layout' ? e : e2; }
+    if (e?.message !== 'layout') throw e;
+    rep = parseMazCard(raster); v2 = true; // throws 'layout' too if this is neither card
   }
   // who is it? read the name cards against the roster's words (best effort — a failure only means «no name»)
   let ocrName = '';

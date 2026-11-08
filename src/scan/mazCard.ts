@@ -52,23 +52,19 @@ function readNumbers(r: Raster, rect: Box, ink: Ink, refH: number, s: number, ga
 const rightmost = (n: Num[]): Num | null => (n.length ? n[n.length - 1] : null);
 
 // ---------------------------------------------------------------- finding lines
-/** y of every thin, long, light-grey horizontal line between x0 and x1 (table rules, card borders).
- *  A rule is a row that is darker than the rows 5 px above and below it, across (almost) the whole width — so it does not depend on the picture's absolute brightness. */
+/** y of every thin, long, light-grey horizontal line between x0 and x1 (table rules, card borders) */
 function hairlines(r: Raster, x0: number, x1: number, y0: number, y1: number): number[] {
   const out: number[] = []; let run: number[] = [];
   const end = () => { if (run.length && run.length <= 7) out.push(Math.round((run[0] + run[run.length - 1]) / 2)); run = []; };
-  const xa = Math.max(0, Math.round(x0)), xb = Math.min(r.width, Math.round(x1)), ya = Math.max(0, Math.round(y0) - 6), yb = Math.min(r.height, Math.round(y1) + 6);
-  const mean = new Float32Array(yb - ya);
-  for (let y = ya; y < yb; y++) { let sum = 0, tot = 0; for (let x = xa; x < xb; x += 2) { sum += lumAt(r, x, y); tot++; } mean[y - ya] = sum / Math.max(1, tot); }
+  const xa = Math.max(0, Math.round(x0)), xb = Math.min(r.width, Math.round(x1));
   for (let y = Math.max(0, Math.round(y0)); y < Math.min(r.height, Math.round(y1)); y++) {
-    const m = mean[y - ya], bg = Math.max(mean[Math.max(0, y - 5 - ya)], mean[Math.min(mean.length - 1, y + 5 - ya)]);
-    let n = 0, tot = 0;
-    if (bg - m >= 10 && m > 150) for (let x = xa; x < xb; x += 2) { tot++; if (lumAt(r, x, y) < bg - 8) n++; }
-    if (tot && n / tot > 0.92) run.push(y); else end();
+    let n = 0, tot = 0, sum = 0;
+    for (let x = xa; x < xb; x += 2) { const l = lumAt(r, x, y); tot++; sum += l; if (l < 248) n++; }
+    const mean = sum / Math.max(1, tot);
+    if (n / Math.max(1, tot) > 0.92 && mean < 244 && mean > 200) run.push(y); else end();
   }
   end();
-  // ringing of a compressed picture can leave a faint twin a few px from a rule: keep one
-  return out.filter((y, i) => i === 0 || y - out[i - 1] > 6);
+  return out;
 }
 
 const INFO_PITCH = 89.5, ROW_H = 145;
@@ -185,5 +181,3 @@ export function cardNameRects(r: Raster): { x0: number; x1: number; y0: number; 
   // the value sits at the bottom-left of its row; the grey label is at the right edge (x ≥ 640), so stop before it
   return [0, 1].map((i) => ({ x0: 110, x1: 630, y0: il[i] / s + 4, y1: (il[i + 1]) / s - 3 }));
 }
-
-export const _internals = { hairlines };

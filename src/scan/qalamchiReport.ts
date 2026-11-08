@@ -3,7 +3,7 @@
 // the overall table's columns come from its header cells, labels are matched fuzzily (some letters may be missing in the
 // PDF's text layer), and the student's name is read from the header.
 import type { TextItem } from './pdfText';
-import { decodeItems, base } from './glyphLearn';
+import { decodeItems, base, VOCAB } from './glyphLearn';
 import { wordSim } from './nameMatch';
 
 export interface QLesson {
@@ -56,6 +56,19 @@ const hasWord = (text: string, w: string): boolean => {
 };
 const isWord = (text: string, w: string): boolean => wordSim(base(text), base(w)) >= 0.85;
 
+// Some generators (Chromium/Skia — the newer kanoon.ir sheet) store Persian text in VISUAL order: every string is reversed
+// («نﺎﺑآ» for «آبان»). Decide for the whole document, from the sheet's own vocabulary, whether reversing reads better; old sheets are untouched.
+const ARABIC = /[\u0621-\u063F\u0641-\u064A\u066E-\u06D3\uFB50-\uFDFF\uFE70-\uFEFF]/; // letters only (not the digits ۰-۹)
+const reverseText = (s: string): string => [...s].reverse().join('').replace(/[0-9۰-۹٠-٩]+/g, (d) => [...d].reverse().join(''));
+export function visualToLogical(items: TextItem[]): TextItem[] {
+  const vocab = new Set(VOCAB);
+  const hits = (s: string) => base(s).split(/[\s:،,()\-]+/).filter((w) => w.length >= 2 && vocab.has(w)).length;
+  let fwd = 0, rev = 0;
+  for (const it of items) if (ARABIC.test(it.text)) { fwd += hits(it.text); rev += hits(reverseText(it.text)); }
+  if (rev <= fwd) return items;
+  return items.map((it) => (ARABIC.test(it.text) ? { ...it, text: reverseText(it.text) } : it));
+}
+
 interface Line { y: number; items: TextItem[] } // items sorted right → left (logical order for Persian)
 function lines(items: TextItem[], tol = 2.6): Line[] {
   const sorted = [...items].sort((a, b) => a.y - b.y);
@@ -74,13 +87,16 @@ const joinText = (its: TextItem[]) => norm(its.map((i) => i.text).join('')).repl
 const HEAD_LABELS = ['گروه', 'نمایندگی', 'مدیر', 'پشتیبان', 'تاریخ', 'میانگین', 'تعداد', 'زمان', 'غیبت'];
 /** the words that follow «label :» in a header line, up to the next label */
 function valueAfter(line: Line, label: string, stop = HEAD_LABELS): string {
+  // «گروه : دوازدهم ریاضی» may arrive as ONE item
+  for (const x of line.items) { const m = /^([^:]{1,14}):\s*(.+)$/.exec(norm(x.text)); if (m && wordSim(base(m[1]).replace(/\s/g, ''), base(label)) >= 0.85) return m[2].trim(); }
   const it = line.items; const k = it.findIndex((x) => { const t = base(x.text).replace(/[:\s]/g, ''); return t.length > 0 && t.length <= label.length + 2 && wordSim(t, base(label)) >= 0.85; });
   if (k < 0) return '';
   const out: string[] = []; let prevX = it[k].x;
   for (let i = k + 1; i < it.length; i++) {
     const t = it[i].text; const b = base(t).replace(/[:\s]/g, '');
     if (!b) continue;
-    if (stop.some((s) => s !== label && b.length >= 2 && wordSim(b, base(s)) >= 0.85)) break;
+    const w0 = base(t).split(/[\s:]+/).filter(Boolean)[0] || '';
+    if (stop.some((s) => s !== label && ((b.length >= 2 && wordSim(b, base(s)) >= 0.85) || (w0.length >= 2 && wordSim(w0, base(s)) >= 0.85)))) break;
     if (prevX - it[i].x > 90 && out.length) break;
     out.push(norm(t).replace(/^:+|:+$/g, '').trim()); prevX = it[i].x;
   }
@@ -89,7 +105,7 @@ function valueAfter(line: Line, label: string, stop = HEAD_LABELS): string {
 
 export function parseQalamchi(all0: TextItem[], rosterWords: string[] = []): QReport {
   const warnings: string[] = [];
-  const dec = decodeItems(all0, rosterWords); const all = dec.items;
+  const dec = decodeItems(visualToLogical(all0), rosterWords); const all = dec.items;
 
   // ---- find the lesson rows: a «87%» cell + at least seven numbers on its left (any layout / panel position)
   const pct = (i: TextItem) => /^\d+%$/.test(norm(i.text).replace(/\s/g, ''));
@@ -98,11 +114,18 @@ export function parseQalamchi(all0: TextItem[], rosterWords: string[] = []): QRe
   const panelLeft = Math.min(...pctItems.map((i) => i.x)) - 340;
   const right = all.filter((i) => i.x >= panelLeft && i.y > 5);
   const L = lines(right);
+  // The newer sheet has the answer grid on the same page, just left of the table: its numbers share the lesson rows' y.
+  // The «سوالات» group header sits over the table's three left-most columns, so it marks where the table really ends.
+  const qx = all.filter((i) => i.x >= panelLeft && isWord(i.text, 'سوالات')).map((i) => i.x);
+  const tableLeft = qx.length ? Math.min(...qx) - 45 : -Infinity;
+  const Lc = Number.isFinite(tableLeft) ? lines(all.filter((i) => i.x >= tableLeft && i.y > 5)) : L;
 
   const lessons: QLesson[] = []; const rowIdx: number[] = [];
   L.forEach((l, idx) => {
     const p = l.items.find(pct); if (!p) return;
-    const nums = l.items.filter((i) => i.x < p.x - 2 && isNum(i.text)).map((i) => numOf(i.text));
+    let numItems = l.items.filter((i) => i.x < p.x - 2 && isNum(i.text));
+    if (numItems.length > 7 && Number.isFinite(tableLeft)) { const c = numItems.filter((i) => i.x >= tableLeft); if (c.length >= 7) numItems = c; }
+    const nums = numItems.map((i) => numOf(i.text));
     if (nums.length < 7) return;
     const n = nums.length;
     const [correct, wrong, blank] = [nums[n - 3], nums[n - 2], nums[n - 1]];
@@ -161,7 +184,7 @@ export function parseQalamchi(all0: TextItem[], rosterWords: string[] = []): QRe
   const headLines = lines(all.filter((i) => i.y < 40), 3);
   let studentName = '', group = '', avgLevel: number | null = null, examsTaken: number | null = null;
   headLines.forEach((hl) => {
-    if (!studentName) { const v = valueAfter(hl, 'نام'); if (v && hl.items.some((x) => isWord(x.text.replace(/[:\s]/g, ''), 'نام'))) studentName = v; }
+    if (!studentName) { const v = valueAfter(hl, 'نام'); if (v && hl.items.some((x) => isWord(x.text.replace(/[:\s]/g, ''), 'نام') || /^\s*نام\s*:/.test(norm(x.text)))) studentName = v; }
     if (!group) { const v = valueAfter(hl, 'گروه'); if (v) group = v; }
     if (avgLevel === null) { const k = hl.items.findIndex((x) => hasWord(x.text, 'میانگین')); if (k >= 0) { const n = hl.items.slice(k + 1).find((x) => /^\d{3,5}$/.test(norm(x.text))); if (n) avgLevel = numOf(n.text); } }
     if (examsTaken === null) { const k = hl.items.findIndex((x) => hasWord(x.text, 'شرکت')); if (k >= 0) { const n = hl.items.slice(k + 1).find((x) => /^\d{1,2}$/.test(norm(x.text))); if (n) examsTaken = numOf(n.text); } }
@@ -191,10 +214,11 @@ export function parseQalamchi(all0: TextItem[], rosterWords: string[] = []): QRe
 
   // ---- participants of the student's group in this exam
   let participants: number | null = null;
-  L.forEach((l) => { if (participants === null && l.items.some((x) => hasWord(x.text, 'شرکت')) && l.items.some((x) => hasWord(x.text, 'کننده'))) { const n = l.items.filter((x) => isNum(x.text) && numOf(x.text) >= 100).sort((a, b) => numOf(b.text) - numOf(a.text))[0]; if (n) participants = numOf(n.text); } });
+  [...L, ...Lc].forEach((l) => { if (participants === null && l.items.some((x) => hasWord(x.text, 'شرکت')) && l.items.some((x) => hasWord(x.text, 'کننده'))) { const n = l.items.filter((x) => isNum(x.text) && numOf(x.text) >= 100).sort((a, b) => numOf(b.text) - numOf(a.text))[0]; if (n) participants = numOf(n.text); } });
 
   // ---- cross-check with the «وضعیت پاسخ‌گویی» summary (the «وضعیت کلی» row: total, correct, wrong)
-  const after = L.slice(rowIdx[rowIdx.length - 1] + 1);
+  const lastY = L[rowIdx[rowIdx.length - 1]].y;
+  const after = Lc.filter((l) => l.y > lastY + 1);
   const sumLine = after.find((l) => l.items.filter((x) => isNum(x.text)).length === 3 && l.items.some((x) => hasWord(x.text, 'کلی') || hasWord(x.text, 'وضعیت')));
   if (sumLine) {
     const [tot, cor, wr] = sumLine.items.filter((x) => isNum(x.text)).sort((a, b) => b.x - a.x).map((x) => numOf(x.text));
