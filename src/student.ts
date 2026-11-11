@@ -5,6 +5,7 @@ import { sb, cfgOk, authErrText } from './supa';
 import { initPwa } from './pwa';
 import { importReport, ExamSettings, fixRowsNames } from './scan';
 import { mkAttGrid } from './attgrid';
+import { CExam, CRes, ceCard, ceHero, ceForm, ceRead, ceCheck, ceDraftNew, ceDraftOf, ceInit, ceSort, cePhase, ceDay, ceLeft, ceTitle, CE_KINDS } from './cexam';
 import { lineChart, chg } from './chart';
 import { planView, nextExam, exTitle, exDateLabel, exLeft } from './plan';
 import { mazeView, nextStage, stageTitle, stageLeft, trackOf } from './maze';
@@ -17,9 +18,9 @@ const DAYN = ['شنبه', 'یکشنبه', 'سه‌شنبه', 'چهارشنبه']
 const STN: any = { g: 'معاف (گروه)', f: 'معاف (معلم)', p: 'معاف (پیشرفت)' };
 const SUBJ = ['ریاضی', 'فیزیک', 'شیمی', 'زیست', 'ادبیات', 'عربی', 'دین و زندگی', 'زبان', 'زمین شناسی'];
 const CFG: ExamSettings = { sections: SUBJ.map((name, i) => ({ id: 'u' + i, name, color: '#888', n: 0, parts: [] })) };
-const T: any = { con: [], ann: [], xi: 'ماز', sch: [], u: null, me: null, exams: [], cal: [], pend: 0, p: 'home', wi: null, open: null, prev: null, err: '', busy: false, ok: '', login: '', rc: [], rw: 0, rd: 0, rerr: '', ab: [], at: null, atErr: '', ae: {}, ab0: {}, atBusy: false, ap: 0, plan: null, plk: 'all', sync: 'ok', loadErr: '' };
+const T: any = { con: [], ann: [], xi: 'ماز', sch: [], u: null, me: null, exams: [], cal: [], pend: 0, p: 'home', wi: null, open: null, prev: null, err: '', busy: false, ok: '', login: '', rc: [], rw: 0, rd: 0, rerr: '', ab: [], at: null, atErr: '', ae: {}, ab0: {}, atBusy: false, ap: 0, plan: null, cex: [], cexErr: '', cf: 'up', cform: null, cbusy: false, plk: 'all', sync: 'ok', loadErr: '' };
 const W: any = window;
-const P = [['home', 'خانه', 'home'], ['ann', 'اطلاعیه‌ها', 'bell'], ['con', 'وقت مشاوره', 'chat'], ['cal', 'تقویم معافیت', 'cal'], ['pln', 'برنامه آزمون‌ها', 'plan'], ['abs', 'غیبت‌های من', 'att'], ['rat', 'حضور و غیاب کلاس', 'clip'], ['rcal', 'تقویم معافیت کلاس', 'users'], ['exm', 'آزمون‌ها', 'clip'], ['send', 'ارسال کارنامه', 'up']];
+const P = [['home', 'خانه', 'home'], ['ann', 'اطلاعیه‌ها', 'bell'], ['con', 'وقت مشاوره', 'chat'], ['cal', 'تقویم معافیت', 'cal'], ['pln', 'برنامه آزمون‌ها', 'plan'], ['cex', 'آزمون‌های کلاس', 'exam'], ['abs', 'غیبت‌های من', 'att'], ['rat', 'حضور و غیاب کلاس', 'clip'], ['rcal', 'تقویم معافیت کلاس', 'users'], ['exm', 'آزمون‌ها', 'clip'], ['send', 'ارسال کارنامه', 'up']];
 const studentPages = () => P.filter(([k]) => T.me?.is_rep || (k !== 'rat' && k !== 'rcal'));
 function closeStudentMenu() { const menu = $('#student-menu'); menu.hidden = true; $('#student-more')?.setAttribute('aria-expanded', 'false'); }
 function toggleStudentMenu() { const menu = $('#student-menu'); menu.hidden = !menu.hidden; $('#student-more')?.setAttribute('aria-expanded', String(!menu.hidden)); }
@@ -36,7 +37,7 @@ const annSort = (x: any[]) => x.filter(annOk).sort((a: any, b: any) => (b.pin ? 
 // نشست را مستقیم از حافظه‌ی دستگاه می‌خوانیم (بدون شبکه) تا برنامه بلافاصله باز شود.
 function localUser(): any { try { return JSON.parse(localStorage.getItem(SK) || 'null')?.user || null; } catch (e) { return null; } }
 // آخرین داده‌های موفق روی خود دستگاه نگه داشته می‌شود؛ دفعه‌ی بعد فوراً نمایش داده می‌شود و در پس‌زمینه به‌روز می‌شود.
-function saveCache() { try { localStorage.setItem(CK, JSON.stringify({ uid: T.u?.id, t: Date.now(), d: { me: T.me, exams: T.exams, cal: T.cal, pend: T.pend, sch: T.sch, ann: T.ann, con: T.con, ab: T.ab, plan: T.plan, rc: T.rc, rerr: T.rerr } })); } catch (e) { /* حافظه پر است */ } }
+function saveCache() { try { localStorage.setItem(CK, JSON.stringify({ uid: T.u?.id, t: Date.now(), d: { me: T.me, exams: T.exams, cal: T.cal, pend: T.pend, sch: T.sch, ann: T.ann, con: T.con, ab: T.ab, plan: T.plan, cex: T.cex, rc: T.rc, rerr: T.rerr } })); } catch (e) { /* حافظه پر است */ } }
 function clearCache() { try { localStorage.removeItem(CK); } catch (e) { /* ignore */ } }
 function calcPos() {
   const iso = todayIso(); let k = -1; T.cal.forEach((r: any, i: number) => { if (r.week_start <= iso) k = i; }); T.wi = Math.max(k, 0);
@@ -83,7 +84,7 @@ async function login() {
 }
 async function logout() { clearCache(); T.sync = 'ok'; T.loadErr = ''; await sb.auth.signOut(); T.u = null; T.me = null; T.p = 'home'; netbar(); draw(); }
 async function load() {
-  const [m, e, c, s, h, an, cs, ab, pl] = await Promise.all([
+  const [m, e, c, s, h, an, cs, ab, pl, ce] = await Promise.all([
     sb.from('students').select('*').maybeSingle(),
     sb.from('exams_pub').select('*'),
     sb.from('calendar_pub').select('*').order('week_start'),
@@ -93,9 +94,10 @@ async function load() {
     sb.from('consults').select('*').order('created_at', { ascending: false }),
     sb.from('attendance').select('*').order('day', { ascending: false }),
     sb.from('exam_plan').select('data').eq('id', 'main').maybeSingle(),
+    sb.from('class_exams').select('*').order('exam_date'),
   ]);
   // خطای شبکه = داده‌های قبلی (ذخیره‌شده) دست‌نخورده می‌ماند
-  if ([m, e, c, s, h, an, cs, ab, pl].some((r: any) => isNet(r.error))) throw new Error('network');
+  if ([m, e, c, s, h, an, cs, ab, pl, ce].some((r: any) => isNet(r.error))) throw new Error('network');
   let rc: any[] = [], rerr = '';
   if (m.data?.is_rep) {
     const r = await sb.rpc('class_calendar');
@@ -104,6 +106,7 @@ async function load() {
   }
   T.con = cs.data || []; T.ab = ab.error ? [] : ab.data || []; T.plan = pl.error ? null : pl.data?.data || null;
   T.ann = annSort(an.data || []);
+  T.cex = ce.error ? [] : ce.data || []; T.cexErr = ce.error ? (/class_exams/i.test(ce.error.message || '') ? 'sql' : ce.error.message) : '';
   T.sch = (h.data || []).sort((a: any, b: any) => (a.date < b.date ? 1 : -1));
   T.me = m.data; T.exams = (e.data || []).sort((a: any, b: any) => (a.date < b.date ? -1 : 1)); T.cal = c.data || []; T.pend = s.count || 0;
   T.rc = rc; T.rerr = rerr; calcPos();
@@ -118,15 +121,74 @@ function draw() {
   $('#who').textContent = T.me ? T.me.name : 'پنل دانش‌آموز';
   if (!T.me) { $('#nv').innerHTML = ''; $('#student-mobile-nav').innerHTML = ''; closeStudentMenu(); $('#pt').textContent = 'ورود'; $('#app').innerHTML = loginView(); return; }
   const pages = studentPages();
-  $('#nv').innerHTML = pages.map(([k, t, i]) => `<button class="${T.p === k ? 'on' : ''}" onclick="go('${k}')" aria-label="${t}">${ic(i)}<span>${t}</span>${k === 'ann' && T.ann.length ? `<em class="bdg">${T.ann.length.toLocaleString('fa-IR')}</em>` : ''}${k === 'con' && upcoming().length ? `<em class="bdg" style="background:var(--ok)">${upcoming().length.toLocaleString('fa-IR')}</em>` : ''}</button>`).join('');
+  $('#nv').innerHTML = pages.map(([k, t, i]) => `<button class="${T.p === k ? 'on' : ''}" onclick="go('${k}')" aria-label="${t}">${ic(i)}<span>${t}</span>${k === 'ann' && T.ann.length ? `<em class="bdg">${T.ann.length.toLocaleString('fa-IR')}</em>` : ''}${k === 'con' && upcoming().length ? `<em class="bdg" style="background:var(--ok)">${upcoming().length.toLocaleString('fa-IR')}</em>` : ''}${k === 'cex' && cexSoon() ? `<em class="bdg" style="background:var(--warn)">${cexSoon().toLocaleString('fa-IR')}</em>` : ''}</button>`).join('');
   const quick = ['home', 'cal', T.me.is_rep ? 'rat' : 'abs', 'exm'];
   const quickPages = pages.filter(([k]) => quick.includes(k)).sort((a, b) => quick.indexOf(a[0]) - quick.indexOf(b[0]));
   $('#student-mobile-nav').innerHTML = quickPages.map(([k, t, i]) => `<button type="button" class="${T.p === k ? 'on' : ''}" onclick="go('${k}')" ${T.p === k ? 'aria-current="page"' : ''}>${ic(i)}<span>${k === 'rat' ? 'حضور کلاس' : k === 'cal' ? 'تقویم' : k === 'abs' ? 'غیبت‌ها' : t}</span></button>`).join('') + `<button type="button" id="student-more" class="${quick.includes(T.p) ? '' : 'on'}" onclick="toggleStudentMenu()" aria-expanded="${!$('#student-menu').hidden}" aria-controls="student-menu"><span class="student-more-icon" aria-hidden="true">☰</span><span>بیشتر</span></button>`;
-  $('#student-menu-links').innerHTML = pages.map(([k, t, i]) => `<button type="button" class="${T.p === k ? 'on' : ''}" onclick="go('${k}')" ${T.p === k ? 'aria-current="page"' : ''}>${ic(i)}<span>${t}</span>${k === 'ann' && T.ann.length ? `<em class="bdg">${T.ann.length.toLocaleString('fa-IR')}</em>` : ''}${k === 'con' && upcoming().length ? `<em class="bdg">${upcoming().length.toLocaleString('fa-IR')}</em>` : ''}</button>`).join('');
+  $('#student-menu-links').innerHTML = pages.map(([k, t, i]) => `<button type="button" class="${T.p === k ? 'on' : ''}" onclick="go('${k}')" ${T.p === k ? 'aria-current="page"' : ''}>${ic(i)}<span>${t}</span>${k === 'ann' && T.ann.length ? `<em class="bdg">${T.ann.length.toLocaleString('fa-IR')}</em>` : ''}${k === 'con' && upcoming().length ? `<em class="bdg">${upcoming().length.toLocaleString('fa-IR')}</em>` : ''}${k === 'cex' && cexSoon() ? `<em class="bdg" style="background:var(--warn)">${cexSoon().toLocaleString('fa-IR')}</em>` : ''}</button>`).join('');
   $('#pt').textContent = (pages.find((p) => p[0] === T.p) || ['', ''])[1];
   const a = $('#app'); a.classList.remove('in'); void a.offsetWidth; a.classList.add('in');
-  a.innerHTML = ({ home, ann, con, cal, rcal, exm, send, abs, rat, pln } as any)[T.p]();
+  a.innerHTML = ({ home, ann, con, cal, rcal, exm, send, abs, rat, pln, cex } as any)[T.p]();
 }
+
+/* ---------- آزمون‌های کلاسی ---------- */
+const myCex = (): CExam[] => (T.cex || []).filter((e: CExam) => e.cls === T.me?.cls).sort(ceSort);
+const cexUp = () => myCex().filter((e) => { const p = cePhase(e); return p === 'soon' || p === 'today' || (p === 'cancel' && daysLeft(e.exam_date) >= 0); });
+const cexNext = (): CExam | null => cexUp().find((e) => e.status !== 'cancelled') || null;
+const cexSoon = () => cexUp().filter((e) => e.status !== 'cancelled' && daysLeft(e.exam_date) <= 3).length;
+/** نمره‌ی این آزمون برای خودِ دانش‌آموز (اگر مدیر منتشر کرده باشد) */
+function cexRes(id: string): CRes | null {
+  const r = (T.sch || []).find((x: any) => x.exam_key === id), l = r?.data?.lessons?.[0];
+  return l ? { s: l.s ?? null, max: l.max, c: l.c ?? null, ab: !!l.ab } : null;
+}
+async function cexReload() {
+  const r = await sb.from('class_exams').select('*').order('exam_date');
+  if (!r.error) { T.cex = r.data || []; saveCache(); }
+}
+const cexPayload = (e: any) => ({ id: e.id || null, subject: e.subject, kind: e.kind, title: e.title || '', exam_date: e.exam_date, start_time: e.start_time || null, period: e.period ?? null, duration: e.duration ?? null, place: e.place || '', topics: e.topics || '', resources: e.resources || '', note: e.note || '', max_score: e.max_score || 20, status: e.status || 'scheduled' });
+function cexActions(e: CExam) {
+  if (!T.me?.is_rep || e.by_role !== 'rep' || cePhase(e) === 'past') return '';
+  return `<button class="btn" onclick="cexEdit('${e.id}')">✎ ویرایش</button><button class="btn" onclick="cexToggle('${e.id}')">${e.status === 'cancelled' ? '♻ فعال‌سازی دوباره' : '🚫 لغو آزمون'}</button><button class="btn" style="color:var(--bad)" onclick="cexDel('${e.id}')">حذف</button>`;
+}
+function cexForm() {
+  const d = T.cform.d, ed = !!d.id;
+  return `<div class="c" style="border-color:var(--ac);margin-bottom:14px"><h3 style="font-size:16px">${ed ? '✎ ویرایش آزمون' : '＋ ثبت آزمون برای کلاس ' + esc(T.me.cls)}</h3>${ceForm(d, { admin: false, classes: [T.me.cls], fixedCls: T.me.cls, editing: ed, needTopics: true })}
+    <div class="cexf-bar"><button class="btn p" ${T.cbusy ? 'disabled' : ''} onclick="cexSave()">${T.cbusy ? 'در حال ذخیره…' : ed ? 'ذخیره‌ی تغییرها' : 'ثبت و اطلاع به هم‌کلاسی‌ها'}</button><button class="btn" onclick="cexClose()">انصراف</button></div></div>`;
+}
+function cex() {
+  const mine = myCex(), up = cexUp(), past = mine.filter((e) => !up.includes(e)).reverse(), nx = cexNext(), list = T.cf === 'past' ? past : up;
+  const rep = T.me.is_rep ? (T.cform ? cexForm() : `<div class="c" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><div style="flex:1;min-width:210px"><b>شما نماینده‌ی کلاس ${esc(T.me.cls)} هستید</b><div class="m">آزمون‌های کلاس را اینجا ثبت کنید تا همه‌ی هم‌کلاسی‌ها فوراً زمان و مباحث را ببینند.</div></div><button class="btn p" onclick="cexNew()">＋ ثبت آزمون جدید</button></div>`) : '';
+  if (T.cexErr) return rep + `<div class="c m">برنامه‌ی آزمون‌های کلاس هنوز فعال نشده است؛ بعداً دوباره سر بزنید.${T.me.is_rep ? '<br>(مدیر باید فایل update-12.sql را روی سرور اجرا کند.)' : ''}</div>`;
+  const seg = `<div class="seg" style="margin:14px 0 10px"><button class="${T.cf === 'up' ? 'on' : ''}" onclick="T.cf='up';draw()">پیش‌رو <small>${up.length.toLocaleString('fa-IR')}</small></button><button class="${T.cf === 'past' ? 'on' : ''}" onclick="T.cf='past';draw()">برگزارشده <small>${past.length.toLocaleString('fa-IR')}</small></button></div>`;
+  const empty = `<div class="c cex-empty"><b>${T.cf === 'up' ? '🎉' : '🗂'}</b>${T.cf === 'up' ? 'آزمونِ پیش‌رویی برای کلاس شما ثبت نشده است.' : 'هنوز آزمونی برگزار نشده است.'}</div>`;
+  return `${rep}${nx && !T.cform ? ceHero(nx) : ''}${seg}${list.map((e) => ceCard(e, { who: true, res: cexRes(e.id), actions: cexActions(e) })).join('') || empty}`;
+}
+async function cexSave() {
+  if (!T.cform || T.cbusy) return;
+  const d = ceRead(); d.cls = T.me.cls; d.classes = [T.me.cls]; T.cform.d = d;
+  const bad = ceCheck(d, { admin: false, needTopics: true, needClass: false }); if (bad) { toast(bad); return; }
+  const old = (T.cex || []).find((x: CExam) => x.id === d.id);
+  T.cbusy = true; draw();
+  const r = await sb.rpc('rep_save_class_exam', { p: cexPayload({ ...d, status: old?.status || 'scheduled' }) });
+  T.cbusy = false;
+  if (r.error) { toast(isNet(r.error) ? 'اتصال برقرار نشد؛ دوباره تلاش کنید.' : /rep_save_class_exam/.test(r.error.message) ? 'سامانه‌ی آزمون‌های کلاس هنوز فعال نشده است.' : r.error.message); draw(); return; }
+  await cexReload(); T.cform = null; toast(d.id ? 'تغییرها ذخیره شد ✓' : 'آزمون ثبت شد و هم‌کلاسی‌ها می‌بینند ✓'); draw();
+}
+async function cexToggle(id: string) {
+  const e = (T.cex || []).find((x: CExam) => x.id === id); if (!e) return; const to = e.status === 'cancelled' ? 'scheduled' : 'cancelled';
+  if (to === 'cancelled' && !confirm('این آزمون لغو شود؟ هم‌کلاسی‌ها آن را با برچسب «لغو شد» می‌بینند.')) return;
+  const r = await sb.rpc('rep_save_class_exam', { p: cexPayload({ ...e, status: to }) });
+  if (r.error) { toast(isNet(r.error) ? 'اتصال برقرار نشد' : r.error.message); return; }
+  await cexReload(); toast(to === 'cancelled' ? 'آزمون لغو شد' : 'آزمون دوباره فعال شد'); draw();
+}
+async function cexDel(id: string) {
+  if (!confirm('این آزمون برای همیشه حذف شود؟\n(اگر فقط عوض شدن موقت است، به‌جای حذف «لغو آزمون» را بزنید.)')) return;
+  const r = await sb.rpc('rep_delete_class_exam', { p_id: id });
+  if (r.error) { toast(isNet(r.error) ? 'اتصال برقرار نشد' : r.error.message); return; }
+  await cexReload(); toast('آزمون حذف شد'); draw();
+}
+ceInit(W, { list: () => T.cex || [], store: (d) => { if (T.cform) T.cform.d = d; }, admin: false, fixedCls: () => T.me?.cls || '' });
+
 const go = (p: string) => { closeStudentMenu(); T.p = p; T.ok = ''; T.err = ''; draw(); window.scrollTo(0, 0); };
 function loginView() {
   if (!cfgOk) return `<div class="c">اتصال به سرور تنظیم نشده است.</div>`;
@@ -144,9 +206,10 @@ function home() {
   const insCard = (ins: string) => { const ex = T.exams.filter((e: any) => e.inst === ins), l = ex[ex.length - 1], p = ex[ex.length - 2]; if (!l) return ''; const d = p ? l.level - p.level : null;
     return `<div class="c k" onclick="T.xi='${ins}';go('exm')" style="cursor:pointer"><span>${ins}</span><b>${n(l.level)}</b><span>تراز ${d != null ? `<span class="${d >= 0 ? 'up' : 'dn'}">${d >= 0 ? '▲' : '▼'} ${n(Math.abs(d))}</span>` : ''} · رتبه ${n(l.rank)}</span></div>`; };
   const sl = T.sch[0];
-  const rp = repTodo(), pex = nextExam(T.plan), pexd = pex ? exLeft(pex, n) : '', mzn = T.plan?.maze ? nextStage(T.plan.maze, mzState().track) : null, mznd = mzn ? stageLeft(mzn) : null;
+  const rp = repTodo(), cexn = cexNext(), pex = nextExam(T.plan), pexd = pex ? exLeft(pex, n) : '', mzn = T.plan?.maze ? nextStage(T.plan.maze, mzState().track) : null, mznd = mzn ? stageLeft(mzn) : null;
   return `<div class="homehero"><div><small>خوش آمدی 👋</small><h2>سلام ${esc(T.me.name)}</h2></div></div>
   ${mzn ? `<div class="ann" style="--ac2:#4560b4" onclick="go('pln')"><div class="ai">🧭</div><div class="ab"><div><b>آزمون ماز بعدی: ${esc(stageTitle(mzn))} — ${mznd === 0 ? 'امروز' : mznd === 1 ? 'فردا' : n(mznd) + ' روز دیگر'}</b></div></div></div>` : ''}
+  ${cexn ? (() => { const K = CE_KINDS[cexn.kind] || CE_KINDS.other; return `<div class="ann" style="--ac2:${K.c}" onclick="go('cex')"><div class="ai">${K.i}</div><div class="ab"><div><b>آزمون کلاس: ${esc(cexn.subject)} (${K.t}) — ${ceDay(cexn.exam_date)} · ${ceLeft(cexn)}</b></div></div></div>`; })() : ''}
   ${pex ? `<div class="ann" style="--ac2:#0891b2" onclick="go('pln')"><div class="ai">🗓️</div><div class="ab"><div><b>آزمون بعدی: ${esc(exTitle(pex))} — ${esc(exDateLabel(pex))}${pexd ? ' (' + pexd + ')' : ''}</b></div></div></div>` : ''}
   ${rp ? `<div class="ann" style="--ac2:#6366f1" onclick="go('rat')"><div class="ai">📋</div><div class="ab"><div><b>حضور و غیاب امروز: ${n(rp)} زنگ هنوز ثبت نشده است.</b></div></div></div>` : ''}
   ${upcoming()[0] ? (() => { const c = upcoming()[0]; return `<div class="ann" style="--ac2:#10b981" onclick="go('con')"><div class="ai">🗓️</div><div class="ab"><div><b>وقت مشاوره‌ی شما (${rel(c.slot_date)}): ${jdate(c.slot_date, { weekday: 'long', day: 'numeric', month: 'long' })} — ساعت ${ftime(c.slot_time)}</b></div>${c.place ? `<span class="tag">📍 ${esc(c.place)}</span>` : ''}${c.note ? `<p>${esc(c.note)}</p>` : ''}</div></div>`; })() : ''}
@@ -287,7 +350,7 @@ function chart(all: any[]) {
 function exm() {
   const tabs = `<div class="seg">${['ماز', 'قلم‌چی', 'مدرسه'].map((k) => `<button class="${T.xi === k ? 'on' : ''}" onclick="T.xi='${k}';draw()">${k === 'مدرسه' ? 'آزمون‌های مدرسه' : 'تراز ' + k}</button>`).join('')}</div>`;
   if (T.xi === 'مدرسه') return tabs + (T.sch.map((e: any) => `<div class="c" style="margin-bottom:10px"><div class="tb"><b style="flex:1">${esc(e.title)} <span class="m">${esc(e.date)}</span></b></div>
-    <div class="tw"><table><thead><tr><th>درس</th><th>نمره</th><th>میانگین کلاس</th></tr></thead><tbody>${e.data.lessons.map((l: any) => `<tr style="cursor:default"><td>${esc(l.n)}</td><td><b>${l.s == null ? '—' : (Math.round(l.s * 100) / 100).toLocaleString('fa-IR')}</b>${l.max !== 20 ? ` <span class="m">از ${n(l.max)}</span>` : ''}</td><td class="m">${l.c == null ? '—' : (Math.round(l.c * 10) / 10).toLocaleString('fa-IR')}</td></tr>`).join('')}</tbody></table></div></div>`).join('') || `<div class="c m">هنوز نمره‌ای ثبت نشده.</div>`);
+    <div class="tw"><table><thead><tr><th>درس</th><th>نمره</th><th>میانگین کلاس</th></tr></thead><tbody>${e.data.lessons.map((l: any) => `<tr style="cursor:default"><td>${esc(l.n)}</td><td><b>${l.ab ? 'غایب' : l.s == null ? '—' : (Math.round(l.s * 100) / 100).toLocaleString('fa-IR')}</b>${l.max !== 20 ? ` <span class="m">از ${n(l.max)}</span>` : ''}</td><td class="m">${l.c == null ? '—' : (Math.round(l.c * 10) / 10).toLocaleString('fa-IR')}</td></tr>`).join('')}</tbody></table></div></div>`).join('') || `<div class="c m">هنوز نمره‌ای ثبت نشده.</div>`);
   const all = T.exams.filter((e: any) => e.inst === T.xi), ex = [...all].reverse();
   if (!ex.length) return tabs + `<div class="c m">هنوز نتیجه‌ی ${T.xi} ثبت نشده. از بخش «ارسال کارنامه» بفرستید.</div>`;
   return tabs + `<div class="c"><h3>روند تراز ${T.xi}</h3>${chart(all) || '<p class="m">بعد از دو آزمون نمودار ساخته می‌شود.</p>'}</div>
@@ -339,5 +402,5 @@ async function submitIt() {
 
 initUi();
 initPwa();
-Object.assign(W, { retryLoad, conSend, conCancel, T, draw, go, login, logout, pick, submitIt, closeStudentMenu, toggleStudentMenu, plKind: (k: string) => { T.plk = k; draw(); }, plSec: (k: string) => { T.plsec = k; draw(); }, mzSet: (k: string, v: string) => { const m = mzState(); m[k] = v || null; if (k === 'track' || k === 'lane') { m.open = null; m.subj = 'all'; } draw(); }, plGo: (id: string) => { document.getElementById('pl_' + id)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); } });
+Object.assign(W, { cexNew: () => { T.cform = { d: ceDraftNew(T.me.cls) }; draw(); window.scrollTo(0, 0); }, cexEdit: (id: string) => { const e = (T.cex || []).find((x: CExam) => x.id === id); if (e) { T.cform = { d: ceDraftOf(e) }; draw(); window.scrollTo(0, 0); } }, cexClose: () => { T.cform = null; draw(); }, cexSave, cexToggle, cexDel, retryLoad, conSend, conCancel, T, draw, go, login, logout, pick, submitIt, closeStudentMenu, toggleStudentMenu, plKind: (k: string) => { T.plk = k; draw(); }, plSec: (k: string) => { T.plsec = k; draw(); }, mzSet: (k: string, v: string) => { const m = mzState(); m[k] = v || null; if (k === 'track' || k === 'lane') { m.open = null; m.subj = 'all'; } draw(); }, plGo: (id: string) => { document.getElementById('pl_' + id)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); } });
 boot();

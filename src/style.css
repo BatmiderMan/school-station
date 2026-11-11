@@ -463,3 +463,68 @@ table.mx tbody tr:hover td:not([data-s]){background:var(--acs)}table.mx tbody tr
 tr.mx-g th,tr.mx-g td{background:var(--card2);font-weight:800;height:32px;border-top:2px solid var(--bd)}tr.mx-g .mx-gh{text-align:right;position:sticky;right:0;z-index:2}tr.mx-g .mx-gc small{display:block;font-size:9.5px;font-weight:400;color:var(--mut)}tr.mx-g .mx-gs{color:var(--mut)}
 tr[hidden]{display:none}
 .mx-tip{position:fixed;z-index:9999;max-width:300px}
+
+/* ===== آزمون‌های کلاسی (کارت، فرم، نمره‌دهی) ===== */
+.cex{display:flex;gap:14px;margin-bottom:12px;padding:14px;border-radius:22px;background:var(--card);border:1px solid var(--bd);border-inline-start:5px solid var(--kc,var(--ac));box-shadow:var(--sh)}
+.cex.past{opacity:.82}.cex.cancel{opacity:.72;border-inline-start-color:var(--mut)}.cex.cancel h3{text-decoration:line-through;color:var(--mut)}
+.cex.today{box-shadow:0 0 0 2px color-mix(in srgb,var(--kc) 55%,transparent),var(--sh)}
+.cex-date{flex:none;width:64px;align-self:flex-start;padding:9px 4px;border-radius:18px;text-align:center;line-height:1.25;background:color-mix(in srgb,var(--kc) 13%,var(--card));color:var(--kc)}
+.cex-date b{display:block;font-size:26px;font-weight:800}.cex-date span{display:block;font-weight:700;font-size:13px}.cex-date small{display:block;font-size:10.5px;opacity:.85}
+.cex-main{flex:1;min-width:0}
+.cex-top{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:2px}
+.cex-kind{font-size:12px;font-weight:700;color:var(--kc)}
+.cex-st{margin-inline-start:auto;padding:2px 12px;border-radius:99px;font-size:12px;font-weight:800;background:var(--card2);border:1px solid var(--bd);color:var(--mut)}
+.cex-st.soon{background:color-mix(in srgb,var(--kc) 12%,var(--card));border-color:color-mix(in srgb,var(--kc) 40%,var(--bd));color:var(--kc)}
+.cex-st.today{background:var(--kc);border-color:var(--kc);color:#fff}
+.cex-st.cancel{background:#dc262615;border-color:#dc262640;color:var(--bad)}
+.cex h3{margin:2px 0 0;font-size:19px;font-weight:800}.cex-sub{color:var(--mut);font-size:13px;margin-top:1px}
+.cex-cancel{margin:8px 0 0;padding:7px 11px;border-radius:12px;background:#dc262612;color:var(--bad);font-size:12.5px}
+.cex-info{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 14px;margin:10px 0 0}
+.cex-i{min-width:0;padding:7px 11px;border-radius:13px;background:var(--card2);border:1px solid var(--bd)}.cex-i.wd{grid-column:1/-1}
+.cex-i dt{font-size:11.5px;color:var(--mut);font-weight:700}.cex-i dd{margin:1px 0 0;font-size:13.5px;word-break:break-word}
+.cex-res{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;margin-top:10px;padding:9px 13px;border-radius:14px;background:color-mix(in srgb,var(--ok) 11%,var(--card));border:1px solid color-mix(in srgb,var(--ok) 35%,var(--bd))}
+.cex-res b{font-size:24px;color:var(--ok)}.cex-res span{color:var(--mut)}.cex-res em{font-style:normal;margin-inline-start:auto;font-size:12.5px;color:var(--mut)}.cex-res.ab{background:var(--card2);border-color:var(--bd);color:var(--mut)}
+.cex-who{margin-top:9px;font-size:11.5px;color:var(--mut)}
+.cex-act{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.cex.pv{box-shadow:none;margin:0;border-style:dashed}
+.cex-sec{margin:18px 2px 8px;font-weight:800;font-size:15px;display:flex;align-items:center;gap:8px}.cex-sec small{color:var(--mut);font-weight:400}
+.cex-empty{text-align:center;padding:34px 16px;color:var(--mut)}.cex-empty b{display:block;font-size:34px;margin-bottom:4px}
+@media(max-width:520px){.cex{gap:10px;padding:12px}.cex-date{width:54px}.cex-date b{font-size:22px}.cex-info{gap:6px 8px}.cex-i{padding:6px 9px}}
+/* فرم */
+.cexf-wrap{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:16px;align-items:start;margin-bottom:12px}
+@media(max-width:900px){.cexf-wrap{grid-template-columns:1fr}}
+.cexf{display:flex;flex-direction:column;gap:12px}
+.cexf-s{padding:14px;border-radius:20px;background:var(--card);border:1px solid var(--bd);box-shadow:var(--sh);display:flex;flex-direction:column;gap:11px}
+.cexf-h{display:flex;gap:11px;align-items:center}.cexf-h i{flex:none;width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-weight:800;background:var(--acs);color:var(--ac)}
+.cexf-h b{display:block;font-size:15px}.cexf-h small{display:block;color:var(--mut);font-size:12px;margin-top:-2px}
+.cexf-f{display:flex;flex-direction:column;gap:4px;min-width:0}.cexf-f>span{font-size:12.5px;font-weight:700}.cexf-f>span em{color:var(--bad);font-style:normal}.cexf-f small{color:var(--mut);font-size:11.5px}
+.cexf-f input:not([type=checkbox]):not([type=radio]),.cexf-f select,.cexf-f textarea{width:100%;padding:10px 12px}
+.cexf-f textarea{min-height:0;resize:vertical}
+.cexf-f input.dp{width:100%}
+.cexf-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:11px}
+.cexf-cls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.cexf-cls small{color:var(--mut)}
+.cexf-chips{display:flex;flex-wrap:wrap;gap:7px}
+.cexf-chip{cursor:pointer;position:relative}.cexf-chip input{position:absolute!important;opacity:0!important;width:1px!important;height:1px!important;margin:0!important;padding:0!important;border:0!important;pointer-events:none;appearance:none;-webkit-appearance:none}
+.cexf-chip span{display:block;padding:7px 13px;border-radius:13px;border:1.5px solid var(--bd);background:var(--card2);font-size:13px;line-height:1.45;transition:.15s}
+.cexf-chip span small{display:block;color:var(--mut);font-size:10.5px;font-weight:400}
+.cexf-chip:has(input:checked) span{border-color:var(--kc,var(--ac));background:color-mix(in srgb,var(--kc,var(--ac)) 13%,var(--card));color:var(--kc,var(--ac));font-weight:800}
+.cexf-chip:has(input:focus-visible) span{box-shadow:0 0 0 3px var(--acs)}
+.cexf-qs{display:flex;gap:5px;flex-wrap:wrap;margin-top:4px}.cexf-q{border:1px solid var(--bd);background:var(--card2);border-radius:99px;padding:1px 11px;font-size:12px;cursor:pointer}.cexf-q:hover{border-color:var(--ac);color:var(--ac)}
+.cexf-w{padding:9px 12px;border-radius:13px;background:#f59e0b1a;border:1px solid #f59e0b55;color:var(--warn);font-size:12.5px}.cexf-w.hi{background:#dc26261a;border-color:#dc262655;color:var(--bad)}
+.cexf-prev{position:sticky;top:12px}.cexf-ph{font-weight:800;font-size:13px;margin:0 4px 8px;color:var(--mut)}
+@media(max-width:900px){.cexf-prev{position:static}}
+.cexf-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 16px}
+/* فهرست مدیر: فیلتر کلاس */
+.cexa-top{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.cexa-new{padding:10px 14px;border-radius:15px;background:var(--acs);border:1px dashed var(--ac);color:var(--ac);font-size:13px;margin-bottom:10px}
+/* نمره‌دهی */
+.cexm-head{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.cexm-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(108px,1fr));gap:8px;margin:12px 0}
+.cexm-stats div{padding:9px 12px;border-radius:14px;background:var(--card2);border:1px solid var(--bd);text-align:center}.cexm-stats b{display:block;font-size:20px}.cexm-stats span{font-size:11.5px;color:var(--mut)}
+.cexm-rel{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:12px 14px;border-radius:16px;margin:10px 0;border:1px solid}
+.cexm-rel.off{background:#f59e0b14;border-color:#f59e0b55}.cexm-rel.on{background:color-mix(in srgb,var(--ok) 10%,var(--card));border-color:color-mix(in srgb,var(--ok) 40%,var(--bd))}
+.cexm-rel p{margin:0;flex:1;min-width:200px;font-size:13px}
+table.cexm td.s{width:150px}table.cexm input.cexm-in{width:92px;text-align:center;font-weight:700;font-size:15px}
+table.cexm tr.ab td{background:repeating-linear-gradient(135deg,transparent 0 6px,#7771 6px 7px);color:var(--mut)}
+table.cexm td.nm{white-space:nowrap}
+table.cexm .tag.r{margin:0}

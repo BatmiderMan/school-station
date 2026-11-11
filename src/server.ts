@@ -238,10 +238,11 @@ export function mkServer(A: any) {
     try { if (A.D.exams.length) removed = await dropStaleExams(list.map((l) => acc[l].sid), new Set(ex.map((r) => `${r.student_id}|${r.exam_key}`))); } catch (e: any) { S.exErr = 'نتیجه‌های پاک‌شده از پنل دانش‌آموز برداشته نشد: ' + (e.message || e); }
     const sch: any[] = [];
     A.sexams().forEach((e: any) => {
+      if (e.hold) return; // آزمون کلاسیِ منتشرنشده: تا «انتشار» نزنید به دانش‌آموزان نمی‌رسد
       const mates = A.D.students.filter((x: any) => x.cls === e.cls), cavg: any = {};
       e.lessons.forEach((ls: any) => { const v = mates.map((x: any) => e.sc[x.id]?.[ls.name]).filter((x: any) => x != null); if (v.length) cavg[ls.name] = v.reduce((p: number, q: number) => p + q, 0) / v.length; });
-      list.forEach((l) => { const st = stu(l), sc = e.sc[l]; if (st.cls !== e.cls || !sc || !Object.keys(sc).length) return;
-        sch.push({ student_id: acc[l].sid, exam_key: e.id, title: e.title, date: e.date, data: { lessons: e.lessons.map((ls: any) => ({ n: ls.name, max: ls.max, s: sc[ls.name] ?? null, c: cavg[ls.name] ?? null })) } }); });
+      list.forEach((l) => { const st = stu(l), sc = e.sc[l], ab = !!e.sa?.[l]; if (st.cls !== e.cls || ((!sc || !Object.keys(sc).length) && !ab)) return;
+        sch.push({ student_id: acc[l].sid, exam_key: e.id, title: e.title, date: e.date, data: { lessons: e.lessons.map((ls: any) => ({ n: ls.name, max: ls.max, s: sc?.[ls.name] ?? null, c: cavg[ls.name] ?? null, ab: ab ? true : null })) } }); });
     });
     S.annErr = '';
     try { await syncAnn(); } catch (e: any) { S.annErr = 'اطلاعیه‌ها منتشر نشد: ' + (e.message || e) + ' — فایل‌های supabase/update-3.sql و update-4.sql را اجرا کنید.'; }

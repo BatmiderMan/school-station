@@ -13,6 +13,7 @@ const ICO: any = {
   up: '<path d="M12 16V4M7 9l5-5 5 5M4 20h16"/>',
   chat: '<path d="M4 5h16v11H10l-4 4v-4H4z"/>',
   bell: '<path d="M6 17v-6a6 6 0 1112 0v6l1.5 2h-15z"/><path d="M10 21a2 2 0 004 0"/>',
+  exam: '<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h6M9 17h4"/>',
 };
 export const ic = (k: string) => `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICO[k] || ''}</svg>`;
 export function toast(m: string) {

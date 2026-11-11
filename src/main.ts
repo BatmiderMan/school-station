@@ -4,7 +4,7 @@ import { mkServer } from './server';
 import { mkExams } from './exams';
 import { mkTrend } from './trend';
 import { mkAttend } from './attend';
-import { mkPlanAdmin } from './plan';
+import { mkPlanAdmin } from './plan'; import { mkClassExams } from './clsexam';
 import { mkCalls } from './calls';
 import { initPwa } from './pwa';
 import { snapList } from './store';
@@ -504,14 +504,15 @@ const SV=mkServer({get D(){return D},CL,annActive:()=>annActive(),toast,letterC,
 const CALLS=mkCalls({get D(){return D},U,CL,SV,esc,n,byNum,save,draw:()=>draw(),bg:()=>bgDraw(),toast,op,dlf:(...a:any[])=>(dlf as any)(...a)});
 const TR=mkTrend({get D(){return D},U,esc,n,n1,draw:()=>draw()});
 const PLA=mkPlanAdmin({get D(){return D},U,save,draw:()=>draw(),esc,n,toast});
-const EX=mkExams({saveFile,TR,get D(){return D},U,save,draw:()=>draw(),bg:()=>bgDraw(),plan:()=>PLA.page(),esc,n,n1,avg,line,hue,spark,CL,byNum,today,SV,scn,schp:()=>schp(),FILES:()=>FILES,dlf:(...a:any[])=>(dlf as any)(...a),toast});
+const CE=mkClassExams({get D(){return D},U,save,draw:()=>draw(),bg:()=>bgDraw(),esc,n,CL,byNum,today,toast,SV,dlf:(name:string,rows:any)=>dlf(name,rows),tt,ensureSch,legacyGrid:(e:any)=>schGrid(e)}); const EX=mkExams({saveFile,TR,get D(){return D},U,save,draw:()=>draw(),bg:()=>bgDraw(),plan:()=>PLA.page(),esc,n,n1,avg,line,hue,spark,CL,byNum,today,SV,scn,schp:()=>schp(),FILES:()=>FILES,dlf:(...a:any[])=>(dlf as any)(...a),toast});
 const AT2=mkAttend({get D(){return D},U,letterC,bg:()=>bgDraw(),esc,n,save,draw:()=>draw(),toast,dateOf,wk0,mid,DAYN,GL,GC,CL,letter,status,subj,byNum,SV,dlf:(...a:any[])=>(dlf as any)(...a),bars,op,sf,callsChanged:()=>CALLS.invalidate(),callsLocal:(r:any)=>CALLS.local(r)});
 AP=SV.autoPub;
-Object.assign(W,SV.h,EX.h,AT2.h,TR.h,CALLS.h,PLA.h,{CALL_student:(id:string)=>CALLS.openForStudent(id)});
+Object.assign(W,SV.h,EX.h,AT2.h,TR.h,CALLS.h,PLA.h,CE.h,{CALL_student:(id:string)=>CALLS.openForStudent(id)});
 SV.init();
 /* ---------- آزمون‌های مدرسه (فقط نمره‌ی هر درس؛ بدون معدل) ---------- */
 function mkSch(t:string,date:string,c:string){const d=nidClean0(date.trim());if(!t.trim()||!/^\d{4}\/\d{2}\/\d{2}$/.test(d)||!j2iso(d)){toast('عنوان و تاریخ معتبر وارد کنید');return false}const id='h'+Date.now().toString(36);ensureSch().exams.push({id,title:t.trim(),date:d,cls:c,lessons:[],sc:{}});U.sx=id;save();return true}
-function schp(){const S=ensureSch(),E=sexams().reverse();if(!U.sx||!S.exams.find(e=>e.id===U.sx))U.sx=E[0]?.id;const e=S.exams.find(x=>x.id===U.sx);
+function schp(){return CE.page()}
+function schpOld(){const S=ensureSch(),E=sexams().reverse();if(!U.sx||!S.exams.find(e=>e.id===U.sx))U.sx=E[0]?.id;const e=S.exams.find(x=>x.id===U.sx);
  return `<div class="g2"><div class="c"><h3>آزمون‌های مدرسه</h3>${E.map(x=>`<div class="row" onclick="U.sx='${x.id}';draw()" style="${x.id===U.sx?'font-weight:800;color:var(--ac)':''}"><span>${esc(x.title)} <span class="tag">${x.cls}</span></span><span class="m">${esc(x.date)} · ${n(x.lessons.length)} درس</span></div>`).join('')||'<p class="m">آزمونی نیست</p>'}</div>
  <div class="c"><h3>آزمون مدرسه‌ی جدید</h3><div class="tb"><input id="ht" placeholder="مثلاً میان‌ترم ۲"><input id="hd" value="${today()}" style="width:110px"><select id="hc">${CL.map(c=>`<option ${c===U.xc?'selected':''}>${c}</option>`).join('')}</select></div><button class="btn p" onclick="newSch()">ایجاد آزمون خالی</button><p class="m">درس‌ها و سقف نمره را بعد از ایجاد آزمون، خودتان تعیین کنید.</p></div></div>${e?schGrid(e):''}`}
 function schGrid(e){const ss=D.students.filter(s=>s.cls===e.cls).sort(byNum),sc=e.sc||{},stats=e.lessons.map(l=>{const v=ss.map(s=>sc[s.id]?.[l.name]).filter(x=>x!=null);return {count:v.length,avg:avg(v)}});
