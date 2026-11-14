@@ -79,7 +79,8 @@ export function cardGeometry(r: Raster): CardGeometry | null {
     for (let j = i + 1; j < ls.length; j++) if (Math.abs(ls[j] - chain[chain.length - 1] - INFO_PITCH * s) <= 5 * s) chain.push(ls[j]);
     if (chain.length > best.length) best = chain;
   }
-  if (best.length < 9) return null;
+  // the full card has 9 rules (name … absences); the «معادل» card only has the first 6 rows (name … date)
+  if (best.length < 6) return null;
   return { dy: best[0] - 698 * s, infoLines: best };
 }
 
@@ -99,15 +100,30 @@ export function parseMazCard(r: Raster): MazReport {
   const box = (x0: number, y0: number, x1: number, y1: number): Box => ({ x: Math.round(x0 * s), y: Math.round(y0 * s + dy), w: Math.round((x1 - x0) * s), h: Math.round((y1 - y0) * s) });
   const kpi = (x0: number, y0: number, x1: number, y1: number) => rightmost(readNumbers(r, box(x0, y0, x1, y1), digitInk, NOM.kpi * s, s))?.v ?? null;
 
-  // ---- title: «… مرحله ۳» (the number is the left-most glyph) and the «تاریخ آزمون: … - hh:mm» line
-  let stage: number | null = null;
-  { const t = readNumbers(r, box(900, 395, 1510, 465), (x, y) => x >= 0 && y >= 0 && x < r.width && y < r.height && lumAt(r, x, y) < 110, NOM.title * s, s, 0.3)[0]; if (t && /^\d{1,2}$/.test(t.text)) stage = parseInt(t.text, 10); }
-  let time: string | null = null, headDate: string | null = null;
-  readNumbers(r, box(900, 466, 1700, 520), greyInk, NOM.head * s, s, 0.5).forEach((n) => {
-    const tm = /^(\d{1,2}):(\d{2})$/.exec(n.text), dt = /^(\d{4})\/(\d{2})\/(\d{2})$/.exec(n.text);
-    if (tm && +tm[1] < 24 && +tm[2] < 60) time = `${tm[1].padStart(2, '0')}:${tm[2]}`;
-    if (dt) headDate = n.text;
-  });
+  // ---- title «… مرحله ۳» (the number is the left-most glyph) and the «تاریخ آزمون: … - hh:mm» line.
+  // Their height differs between card variants (a stamp can push them down), so they are found as the first text bands below the banner.
+  const darkInk: Ink = (x, y) => x >= 0 && y >= 0 && x < r.width && y < r.height && lumAt(r, x, y) < 110;
+  const bandsOf = (x0: number, x1: number, y0: number, y1: number, f: Ink, minH: number): [number, number][] => {
+    const out: [number, number][] = []; let a = -1, last = -1;
+    for (let y = Math.max(0, Math.round(y0)); y < Math.min(r.height, Math.round(y1)); y++) {
+      let c = 0; for (let x = Math.round(x0); x < x1; x += 2) if (f(x, y)) c++;
+      if (c >= 2) { if (a < 0) a = y; last = y; } else if (a >= 0 && y - last > 3 * s) { if (last - a + 1 >= minH) out.push([a, last + 1]); a = -1; }
+    }
+    if (a >= 0 && last - a + 1 >= minH) out.push([a, last + 1]);
+    return out;
+  };
+  let stage: number | null = null, time: string | null = null, headDate: string | null = null;
+  const tb = bandsOf(900 * s, 1510 * s, 330 * s, 620 * s, darkInk, 14 * s)[0];
+  if (tb) {
+    const t0 = readNumbers(r, { x: Math.round(900 * s), y: tb[0] - 4, w: Math.round(610 * s), h: tb[1] - tb[0] + 8 }, darkInk, NOM.title * s, s, 0.3)[0];
+    if (t0 && /^\d{1,2}$/.test(t0.text)) stage = parseInt(t0.text, 10);
+    const db = bandsOf(900 * s, 1700 * s, tb[1] + 4, tb[1] + 110 * s, greyInk, 10 * s)[0];
+    if (db) readNumbers(r, { x: Math.round(900 * s), y: db[0] - 4, w: Math.round(800 * s), h: db[1] - db[0] + 8 }, greyInk, NOM.head * s, s, 0.5).forEach((n) => {
+      const tm = /^(\d{1,2}):(\d{2})$/.exec(n.text), dt = /^(\d{4})\/(\d{2})\/(\d{2})$/.exec(n.text);
+      if (tm && +tm[1] < 24 && +tm[2] < 60) time = `${tm[1].padStart(2, '0')}:${tm[2]}`;
+      if (dt) headDate = n.text;
+    });
+  }
 
   // ---- «وضعیت کلی» tiles
   const level = kpi(1900, 735, 2180, 810), countryRank = kpi(1000, 735, 1445, 810), regionRank = kpi(1900, 925, 2180, 1000);
@@ -118,7 +134,7 @@ export function parseMazCard(r: Raster): MazReport {
     const a = il[i] + 8 * s, b = i + 1 < il.length ? il[i + 1] - 6 * s : a + 90 * s;
     return { x: Math.round(118 * s), y: Math.round(a), w: Math.round(520 * s), h: Math.round(b - a) };
   };
-  const infoNum = (i: number) => readNumbers(r, rowRect(i), digitInk, NOM.info * s, s, 1.2)[0] || null;
+  const infoNum = (i: number) => i >= il.length ? null : readNumbers(r, rowRect(i), digitInk, NOM.info * s, s, 1.2)[0] || null;
   const infoDate = infoNum(5)?.text || '';
   const avgLevel = infoNum(6)?.v ?? null, participants = infoNum(7)?.v ?? null, absent = infoNum(8)?.v ?? null;
   const pickDate = (t: string): string | null => {
@@ -130,7 +146,7 @@ export function parseMazCard(r: Raster): MazReport {
   if (!date) warnings.push('تاریخ آزمون خوانده نشد.');
 
   // ---- «وضعیت دروس» table: rows are the 145 px bands between the long rules
-  const rules = hairlines(r, 200 * s, 2200 * s, 1500 * s + dy, r.height);
+  const rules = hairlines(r, 200 * s, 2200 * s, 1300 * s + dy, r.height);
   let j = -1;
   for (let i = 0; i + 1 < rules.length; i++) { const g = rules[i + 1] - rules[i]; if (g >= 120 * s && g <= 220 * s) { j = i; break; } }
   if (j < 1) throw new Error('layout');
@@ -148,7 +164,7 @@ export function parseMazCard(r: Raster): MazReport {
     const lv = rightmost(readNumbers(r, rowBox(1690, 1830, 4, 75), digitInk, NOM.tlevel * s, s))?.v ?? null;
     const rk = rightmost(readNumbers(r, rowBox(150, 400, 4, ROW_H - 4), digitInk, NOM.rank * s, s))?.v ?? null;
     // «درست ۳۶ | نادرست ۲ | نزده ۲» — only the numbers are dark/coloured, the words are grey; right → left = correct, wrong, blank
-    const ans = readNumbers(r, rowBox(700, 1215, 4, ROW_H - 4), digitInk, NOM.ans * s, s, 1.0).reverse();
+    const ans = readNumbers(r, rowBox(800, 1215, 4, ROW_H - 4), digitInk, NOM.ans * s, s, 1.0).reverse();
     if (ans.length !== 3) warnings.push(`پاسخ‌های درس ${k + 1} کامل خوانده نشد.`);
     return {
       index: k, headingBox: hbox, sig: signature(r, hbox, pageInk),
